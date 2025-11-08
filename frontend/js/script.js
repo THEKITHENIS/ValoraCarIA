@@ -61,6 +61,13 @@ document.addEventListener('DOMContentLoaded', () => {
     let consecutiveFailures = 0;
     const MAX_CONSECUTIVE_FAILURES = 3;
     let uploadedCSVFiles = [];
+
+    // Variables GPS
+    let gpsWatchId = null;
+    let gpsEnabled = false;
+    let lastGPSPosition = null;
+    let gpsDataPoints = [];
+    let totalGPSDistance = 0;
     
     // === FUNCIONES DE ALMACENAMIENTO ===
     
@@ -101,7 +108,141 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     vehicleDataInputs.forEach(input => input.addEventListener('change', saveVehicleInfo));
-    
+
+    // === FUNCIONES GPS ===
+
+    /**
+     * Iniciar seguimiento GPS
+     */
+    function startGPSTracking() {
+        if (!navigator.geolocation) {
+            console.warn('[GPS] Geolocalización no soportada en este navegador');
+            return false;
+        }
+
+        if (gpsWatchId !== null) {
+            console.log('[GPS] Ya está activo');
+            return true;
+        }
+
+        console.log('[GPS] Iniciando seguimiento...');
+
+        gpsWatchId = navigator.geolocation.watchPosition(
+            handleGPSPosition,
+            handleGPSError,
+            {
+                enableHighAccuracy: true,
+                timeout: 5000,
+                maximumAge: 0
+            }
+        );
+
+        gpsEnabled = true;
+        totalGPSDistance = 0;
+        gpsDataPoints = [];
+        console.log('[GPS] ✓ Seguimiento iniciado');
+        return true;
+    }
+
+    /**
+     * Detener seguimiento GPS
+     */
+    function stopGPSTracking() {
+        if (gpsWatchId !== null) {
+            navigator.geolocation.clearWatch(gpsWatchId);
+            gpsWatchId = null;
+            gpsEnabled = false;
+            console.log('[GPS] ✓ Seguimiento detenido');
+            console.log(`[GPS] Distancia total GPS: ${totalGPSDistance.toFixed(3)} km`);
+        }
+    }
+
+    /**
+     * Manejar nueva posición GPS
+     */
+    function handleGPSPosition(position) {
+        const newPosition = {
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+            accuracy: position.coords.accuracy,
+            speed: position.coords.speed, // m/s
+            timestamp: position.timestamp
+        };
+
+        // Calcular distancia si hay posición anterior
+        if (lastGPSPosition) {
+            const distance = SENTINEL.GPS.calculateDistance(
+                lastGPSPosition.latitude,
+                lastGPSPosition.longitude,
+                newPosition.latitude,
+                newPosition.longitude
+            );
+
+            // Solo sumar si la distancia es razonable (menos de 100m entre lecturas)
+            if (distance < 0.1) {
+                totalGPSDistance += distance;
+            }
+        }
+
+        lastGPSPosition = newPosition;
+        gpsDataPoints.push(newPosition);
+
+        // Log cada 10 posiciones
+        if (gpsDataPoints.length % 10 === 0) {
+            console.log(`[GPS] ${gpsDataPoints.length} puntos - ${totalGPSDistance.toFixed(3)} km - Precisión: ${newPosition.accuracy.toFixed(0)}m`);
+        }
+    }
+
+    /**
+     * Manejar error GPS
+     */
+    function handleGPSError(error) {
+        let errorMsg = '';
+        switch(error.code) {
+            case error.PERMISSION_DENIED:
+                errorMsg = 'Permiso GPS denegado';
+                break;
+            case error.POSITION_UNAVAILABLE:
+                errorMsg = 'Posición no disponible';
+                break;
+            case error.TIMEOUT:
+                errorMsg = 'Timeout GPS';
+                break;
+            default:
+                errorMsg = 'Error desconocido';
+        }
+        console.error(`[GPS] ✗ ${errorMsg}`);
+    }
+
+    /**
+     * Obtener velocidad preferida (GPS si disponible, sino OBD)
+     */
+    function getPreferredSpeed(obdSpeed) {
+        if (lastGPSPosition && lastGPSPosition.speed !== null && lastGPSPosition.speed > 0) {
+            // Convertir de m/s a km/h
+            const gpsSpeedKmh = lastGPSPosition.speed * 3.6;
+
+            // Usar GPS si es razonable (< 250 km/h)
+            if (gpsSpeedKmh < 250) {
+                return gpsSpeedKmh;
+            }
+        }
+
+        // Fallback a OBD
+        return obdSpeed;
+    }
+
+    /**
+     * Obtener distancia preferida (GPS si disponible, sino OBD)
+     */
+    function getPreferredDistance(obdDistance) {
+        if (gpsEnabled && totalGPSDistance > 0) {
+            // Preferir GPS si tiene datos
+            return totalGPSDistance;
+        }
+        return obdDistance;
+    }
+
     // === FUNCIONES DE ACTUALIZACIÓN UI ===
     
     function updateLiveData(data) {

@@ -457,10 +457,49 @@ def predictive_analysis():
             "duration_min": round((trip_data["last_read_time"] - trip_data["start_time"]) / 60, 1)
         }
         
-        prompt = f"""Eres ingeniero de diagnóstico vehicular especializado en MANTENIMIENTO PREDICTIVO.
+        # Obtener tipo de transmisión
+        transmission = vehicle_info.get('transmission', 'manual')
+        transmission_text = {
+            'manual': 'MANUAL',
+            'automatica': 'AUTOMÁTICA',
+            'dsg': 'DSG/DCT (Doble Embrague)',
+            'cvt': 'CVT (Transmisión Variable Continua)'
+        }.get(transmission, 'MANUAL')
+
+        # Análisis específico por transmisión
+        transmission_analysis = {
+            'manual': """
+ANÁLISIS TRANSMISIÓN MANUAL:
+- Evalúa desgaste de embrague analizando cambios bruscos de RPM
+- Revisa sincronización de cambios basándote en relación RPM/velocidad
+- Detecta patrones de uso incorrecto (salidas en marchas altas, exceso de RPM en neutro)
+- Predice vida útil del embrague según estilo de conducción""",
+            'automatica': """
+ANÁLISIS TRANSMISIÓN AUTOMÁTICA:
+- Evalúa suavidad de cambios mediante variaciones de RPM
+- Detecta patrones de cambios anormales (kickdown excesivo, hunting entre marchas)
+- Analiza temperatura de transmisión indirectamente vía carga del motor
+- Predice necesidad de cambio de fluido ATF según kilometraje y uso""",
+            'dsg': """
+ANÁLISIS TRANSMISIÓN DSG/DCT:
+- Evalúa comportamiento en cambios rápidos y secuenciales
+- Detecta sobrecalentamiento del doble embrague en uso urbano intenso
+- Analiza patrones de cambio en modo manual vs automático
+- Predice desgaste de mecatrónica y embragues según estilo de conducción""",
+            'cvt': """
+ANÁLISIS TRANSMISIÓN CVT:
+- Evalúa eficiencia de la transmisión variable mediante relación RPM/velocidad
+- Detecta comportamiento anormal de la correa/cadena CVT
+- Analiza patrones de deslizamiento o vibraciones (RPM constantes a velocidades variables)
+- Predice necesidad de mantenimiento de fluido CVT según kilometraje"""
+        }.get(transmission, '')
+
+        prompt = f"""Eres ingeniero de diagnóstico vehicular especializado en MANTENIMIENTO PREDICTIVO y TRANSMISIONES.
 
 VEHÍCULO: {vehicle_info.get('brand', 'N/D')} {vehicle_info.get('model', 'N/D')} ({vehicle_info.get('year', 'N/D')})
 KILOMETRAJE: {vehicle_info.get('mileage', 'N/D')} km
+COMBUSTIBLE: {vehicle_info.get('type', 'N/D').upper()}
+TRANSMISIÓN: {transmission_text}
 
 DATOS VIAJE:
 - Duración: {stats['duration_min']} min
@@ -470,11 +509,14 @@ DATOS VIAJE:
 - MAF promedio: {stats['maf_avg']} g/s
 - Temp máx: {stats['temp_max']}°C
 
+{transmission_analysis}
+
 Proporciona:
-1. Predicción de fallos en 6-12 meses
-2. Componentes prioritarios
-3. Vida útil estimada
-4. Mantenimiento preventivo
+1. Predicción de fallos en 6-12 meses (INCLUYENDO análisis específico de transmisión {transmission_text})
+2. Componentes prioritarios (motor + transmisión)
+3. Vida útil estimada de componentes críticos
+4. Mantenimiento preventivo (incluyendo fluidos de transmisión si aplica)
+5. Análisis del estilo de conducción y su impacto en la transmisión
 
 JSON VÁLIDO:
 {{
