@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SENTINEL PRO - Analytics</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/fleet.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+    <!-- HEADER CON NAVEGACIÓN -->
+    <header class="fleet-header">
+        <div class="header-content">
+            <div class="header-left">
+                <h1>
+                    <i class="fas fa-shield-halved"></i>
+                    SENTINEL PRO
+                </h1>
+                <p>Analytics y Estadísticas</p>
+            </div>
+            <nav class="main-nav">
+                <a href="index.html" class="nav-link">
+                    <i class="fas fa-tachometer-alt"></i>
+                    <span>Dashboard</span>
+                </a>
+                <a href="fleet.html" class="nav-link">
+                    <i class="fas fa-cars"></i>
+                    <span>Flotas</span>
+                </a>
+                <a href="analytics.html" class="nav-link active">
+                    <i class="fas fa-chart-line"></i>
+                    <span>Análisis</span>
+                </a>
+            </nav>
+        </div>
+    </header>
+
+    <!-- CONTENEDOR PRINCIPAL -->
+    <div class="container fleet-container">
+
+        <!-- SECCIÓN SELECTOR DE VEHÍCULO Y FECHAS -->
+        <div class="card">
+            <h2><i class="fas fa-sliders-h"></i> Selector de Datos</h2>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label for="vehicleSelect"><i class="fas fa-car"></i> Vehículo</label>
+                    <select id="vehicleSelect">
+                        <option value="">Seleccionar vehículo...</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="startDate"><i class="fas fa-calendar"></i> Fecha Inicio</label>
+                    <input type="date" id="startDate">
+                </div>
+                <div class="form-group">
+                    <label for="endDate"><i class="fas fa-calendar"></i> Fecha Fin</label>
+                    <input type="date" id="endDate">
+                </div>
+                <div class="form-group" style="display: flex; align-items: flex-end;">
+                    <button id="loadDataBtn" class="btn btn-primary" style="width: 100%;">
+                        <i class="fas fa-sync"></i>
+                        Cargar Datos
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- KPIs GENERALES -->
+        <div id="kpisSection" style="display: none;">
+            <h2 class="section-title"><i class="fas fa-chart-bar"></i> Indicadores Clave</h2>
+            <div class="kpi-grid">
+                <div class="kpi-card">
+                    <i class="fas fa-route"></i>
+                    <div>
+                        <span class="kpi-value" id="kpi_trips">0</span>
+                        <span class="kpi-label">Viajes Totales</span>
+                    </div>
+                </div>
+                <div class="kpi-card">
+                    <i class="fas fa-road"></i>
+                    <div>
+                        <span class="kpi-value" id="kpi_distance">0</span>
+                        <span class="kpi-label">km Recorridos</span>
+                    </div>
+                </div>
+                <div class="kpi-card">
+                    <i class="fas fa-tachometer-alt"></i>
+                    <div>
+                        <span class="kpi-value" id="kpi_avg_speed">0</span>
+                        <span class="kpi-label">Velocidad Media</span>
+                    </div>
+                </div>
+                <div class="kpi-card">
+                    <i class="fas fa-heartbeat"></i>
+                    <div>
+                        <span class="kpi-value" id="kpi_health">100</span>
+                        <span class="kpi-label">Salud Promedio</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- GRÁFICOS PRINCIPALES -->
+        <div id="chartsSection" style="display: none;">
+            <div class="charts-grid">
+
+                <!-- Gráfico: Evolución de Salud -->
+                <div class="card chart-card">
+                    <h3><i class="fas fa-heartbeat"></i> Evolución de Salud del Vehículo</h3>
+                    <canvas id="healthChart"></canvas>
+                </div>
+
+                <!-- Gráfico: Distribución de Conducción -->
+                <div class="card chart-card">
+                    <h3><i class="fas fa-road"></i> Distribución de Conducción</h3>
+                    <canvas id="drivingChart"></canvas>
+                </div>
+
+                <!-- Gráfico: Viajes por Semana -->
+                <div class="card chart-card full-width">
+                    <h3><i class="fas fa-chart-bar"></i> Actividad Semanal</h3>
+                    <canvas id="weeklyChart"></canvas>
+                </div>
+
+                <!-- Gráfico: Velocidad Media por Viaje -->
+                <div class="card chart-card">
+                    <h3><i class="fas fa-gauge"></i> Velocidad Media por Viaje</h3>
+                    <canvas id="speedChart"></canvas>
+                </div>
+
+                <!-- Gráfico: Distancia por Viaje -->
+                <div class="card chart-card">
+                    <h3><i class="fas fa-route"></i> Distancia por Viaje</h3>
+                    <canvas id="distanceChart"></canvas>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- TABLA DE VIAJES -->
+        <div id="tripsTable" style="display: none;">
+            <div class="card">
+                <div class="table-header">
+                    <h2><i class="fas fa-list"></i> Historial de Viajes</h2>
+                    <button id="exportExcelBtn" class="btn btn-secondary">
+                        <i class="fas fa-file-excel"></i>
+                        Exportar a Excel
+                    </button>
+                </div>
+                <div class="table-responsive">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Fecha</th>
+                                <th>Distancia</th>
+                                <th>Duración</th>
+                                <th>Vel. Media</th>
+                                <th>Salud</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tripsTableBody">
+                            <tr>
+                                <td colspan="7" class="no-data">No hay datos para mostrar</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- PLACEHOLDER -->
+        <div id="noDataPlaceholder" class="no-vehicles">
+            <i class="fas fa-chart-line"></i>
+            <h3>Selecciona un vehículo para ver analytics</h3>
+            <p>Elige un vehículo y rango de fechas para visualizar las estadísticas y gráficos</p>
+        </div>
+
+    </div>
+
+    <!-- FOOTER -->
+    <footer>
+        <p>SENTINEL PRO v10.0 - Sistema de Analytics © 2025</p>
+        <p style="font-size: 0.8rem; margin-top: 0.5rem; opacity: 0.7;">
+            Powered by Chart.js | Visualización avanzada de datos
+        </p>
+    </footer>
+
+    <style>
+        .section-title {
+            margin: 2rem 0 1rem 0;
+            color: #1e293b;
+            font-size: 1.5rem;
+        }
+
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .kpi-card {
+            background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+            padding: 1.5rem;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        }
+
+        .kpi-card i {
+            font-size: 2.5rem;
+            color: #3b82f6;
+        }
+
+        .kpi-value {
+            display: block;
+            font-size: 2rem;
+            font-weight: 700;
+            color: #1e293b;
+            line-height: 1;
+        }
+
+        .kpi-label {
+            display: block;
+            font-size: 0.85rem;
+            color: #64748b;
+            margin-top: 0.25rem;
+        }
+
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
+            gap: 2rem;
+            margin-top: 2rem;
+        }
+
+        .chart-card {
+            padding: 1.5rem;
+        }
+
+        .chart-card.full-width {
+            grid-column: 1 / -1;
+        }
+
+        .chart-card h3 {
+            margin: 0 0 1.5rem 0;
+            color: #1e293b;
+            font-size: 1.1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .table-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .table-responsive {
+            overflow-x: auto;
+        }
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .data-table th {
+            background: #f1f5f9;
+            padding: 1rem;
+            text-align: left;
+            color: #475569;
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+
+        .data-table td {
+            padding: 1rem;
+            border-bottom: 1px solid #e2e8f0;
+            color: #1e293b;
+        }
+
+        .data-table tbody tr:hover {
+            background: #f8fafc;
+        }
+
+        .no-data {
+            text-align: center;
+            color: #64748b;
+            padding: 2rem;
+        }
+
+        @media (max-width: 768px) {
+            .charts-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .kpi-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+
+    <script src="js/common.js"></script>
+    <script>
+        // Analytics simplificado inline
+        document.addEventListener('DOMContentLoaded', async () => {
+            console.log('[ANALYTICS] Sistema de analytics iniciado');
+
+            const vehicleSelect = document.getElementById('vehicleSelect');
+            const startDate = document.getElementById('startDate');
+            const endDate = document.getElementById('endDate');
+            const loadDataBtn = document.getElementById('loadDataBtn');
+
+            const kpisSection = document.getElementById('kpisSection');
+            const chartsSection = document.getElementById('chartsSection');
+            const tripsTable = document.getElementById('tripsTable');
+            const noDataPlaceholder = document.getElementById('noDataPlaceholder');
+
+            let charts = {};
+
+            // Cargar vehículos
+            async function loadVehicles() {
+                try {
+                    const data = await SENTINEL.API.get('/api/vehicles');
+                    if (data.success) {
+                        vehicleSelect.innerHTML = '<option value="">Seleccionar vehículo...</option>';
+                        data.vehicles.forEach(v => {
+                            const option = document.createElement('option');
+                            option.value = v.id;
+                            option.textContent = `${v.brand} ${v.model} (${v.year})`;
+                            vehicleSelect.appendChild(option);
+                        });
+                    }
+                } catch (error) {
+                    console.error('[ANALYTICS] Error cargando vehículos:', error);
+                }
+            }
+
+            // Cargar datos y generar gráficos
+            async function loadAnalytics() {
+                const vehicleId = vehicleSelect.value;
+                if (!vehicleId) {
+                    SENTINEL.Toast.warning('Selecciona un vehículo');
+                    return;
+                }
+
+                try {
+                    const params = new URLSearchParams();
+                    if (startDate.value) params.append('start_date', startDate.value);
+                    if (endDate.value) params.append('end_date', endDate.value);
+
+                    const data = await SENTINEL.API.get(`/api/analytics/${vehicleId}?${params}`);
+
+                    if (data.success) {
+                        displayKPIs(data.stats);
+                        displayCharts(data.charts);
+                        displayTripsTable(data.stats.trips || []);
+
+                        noDataPlaceholder.style.display = 'none';
+                        kpisSection.style.display = 'block';
+                        chartsSection.style.display = 'block';
+                        tripsTable.style.display = 'block';
+                    }
+                } catch (error) {
+                    console.error('[ANALYTICS] Error:', error);
+                    SENTINEL.Toast.error('Error cargando analytics');
+                }
+            }
+
+            // Mostrar KPIs
+            function displayKPIs(stats) {
+                document.getElementById('kpi_trips').textContent = stats.total_trips || 0;
+                document.getElementById('kpi_distance').textContent = SENTINEL.Formatter.number(stats.total_distance, 0);
+                document.getElementById('kpi_avg_speed').textContent = SENTINEL.Formatter.number(stats.avg_speed, 0);
+                document.getElementById('kpi_health').textContent = stats.avg_health_score || 100;
+            }
+
+            // Mostrar gráficos
+            function displayCharts(chartData) {
+                // Destruir gráficos anteriores
+                Object.values(charts).forEach(chart => chart.destroy());
+                charts = {};
+
+                // Gráfico de salud
+                const healthCtx = document.getElementById('healthChart').getContext('2d');
+                charts.health = new Chart(healthCtx, {
+                    type: 'line',
+                    data: {
+                        labels: chartData.health_timeline.labels,
+                        datasets: [{
+                            label: 'Score de Salud',
+                            data: chartData.health_timeline.data,
+                            borderColor: '#3b82f6',
+                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                            tension: 0.4,
+                            fill: true
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: true,
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                max: 100
+                            }
+                        }
+                    }
+                });
+
+                // Gráfico de distribución
+                const drivingCtx = document.getElementById('drivingChart').getContext('2d');
+                charts.driving = new Chart(drivingCtx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: chartData.driving_distribution.labels,
+                        datasets: [{
+                            data: chartData.driving_distribution.data,
+                            backgroundColor: ['#10b981', '#3b82f6', '#f59e0b']
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: true
+                    }
+                });
+            }
+
+            // Mostrar tabla de viajes
+            function displayTripsTable(trips) {
+                const tbody = document.getElementById('tripsTableBody');
+                if (trips.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="7" class="no-data">No hay viajes registrados</td></tr>';
+                    return;
+                }
+
+                tbody.innerHTML = trips.map((trip, index) => `
+                    <tr>
+                        <td>${index + 1}</td>
+                        <td>${SENTINEL.Formatter.date(trip.start_time, true)}</td>
+                        <td>${SENTINEL.Formatter.distance(trip.distance)}</td>
+                        <td>${SENTINEL.Formatter.duration(trip.duration)}</td>
+                        <td>${SENTINEL.Formatter.speed(trip.avg_speed)}</td>
+                        <td><span class="badge ${SENTINEL.HealthUtils.getHealthClass(trip.health_score || 100)}">${trip.health_score || 100}</span></td>
+                        <td><button class="btn-small btn-view" onclick="viewTrip(${trip.id})"><i class="fas fa-eye"></i></button></td>
+                    </tr>
+                `).join('');
+            }
+
+            // Event listeners
+            loadDataBtn.addEventListener('click', loadAnalytics);
+
+            // Inicializar
+            await loadVehicles();
+
+            // Establecer fechas por defecto (último mes)
+            const today = new Date();
+            const lastMonth = new Date(today);
+            lastMonth.setMonth(lastMonth.getMonth() - 1);
+            endDate.valueAsDate = today;
+            startDate.valueAsDate = lastMonth;
+
+            console.log('[ANALYTICS] ✓ Sistema listo');
+        });
+
+        function viewTrip(tripId) {
+            SENTINEL.Toast.info(`Viendo viaje #${tripId}`);
+        }
+    </script>
+</body>
+</html>

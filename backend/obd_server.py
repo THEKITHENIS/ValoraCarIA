@@ -778,9 +778,471 @@ def generate_report():
     pdf.output(filename)
     return send_file(filename, as_attachment=True)
 
+# =============================================================================
+# ENDPOINTS REST API - SISTEMA DE FLOTAS v10.0
+# =============================================================================
+
+# Importar DatabaseManager
+import sys
+sys.path.append(os.path.dirname(__file__))
+try:
+    from database import get_db
+    db = get_db()
+    print("[DB] ✓ DatabaseManager cargado")
+except Exception as e:
+    print(f"[DB] ⚠️  Error cargando DatabaseManager: {e}")
+    db = None
+
+# --- ENDPOINTS DE VEHÍCULOS ---
+
+@app.route("/api/vehicles", methods=["POST"])
+def create_vehicle_endpoint():
+    """Crear un nuevo vehículo"""
+    if not db:
+        return jsonify({"error": "Base de datos no disponible"}), 500
+
+    try:
+        data = request.json
+
+        # Validar campos requeridos
+        required_fields = ['brand', 'model', 'year', 'fuel_type', 'transmission']
+        for field in required_fields:
+            if field not in data:
+                return jsonify({"error": f"Campo requerido: {field}"}), 400
+
+        vehicle_id = db.create_vehicle(
+            vin=data.get('vin', f"VIN{int(time.time())}"),  # VIN temporal si no se proporciona
+            brand=data['brand'],
+            model=data['model'],
+            year=int(data['year']),
+            fuel_type=data['fuel_type'],
+            transmission=data['transmission'],
+            mileage=int(data.get('mileage', 0)),
+            notes=data.get('notes', '')
+        )
+
+        return jsonify({
+            "success": True,
+            "vehicle_id": vehicle_id,
+            "message": "Vehículo creado correctamente"
+        }), 201
+
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        print(f"[API] Error creando vehículo: {e}")
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/vehicles", methods=["GET"])
+def get_vehicles_endpoint():
+    """Obtener lista de vehículos"""
+    if not db:
+        return jsonify({"error": "Base de datos no disponible"}), 500
+
+    try:
+        active_only = request.args.get('active', 'true').lower() == 'true'
+        vehicles = db.get_all_vehicles(active_only=active_only)
+
+        return jsonify({
+            "success": True,
+            "count": len(vehicles),
+            "vehicles": vehicles
+        })
+
+    except Exception as e:
+        print(f"[API] Error obteniendo vehículos: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/vehicles/<int:vehicle_id>", methods=["GET"])
+def get_vehicle_endpoint(vehicle_id):
+    """Obtener detalles de un vehículo"""
+    if not db:
+        return jsonify({"error": "Base de datos no disponible"}), 500
+
+    try:
+        vehicle = db.get_vehicle(vehicle_id)
+
+        if not vehicle:
+            return jsonify({"error": "Vehículo no encontrado"}), 404
+
+        return jsonify({
+            "success": True,
+            "vehicle": vehicle
+        })
+
+    except Exception as e:
+        print(f"[API] Error obteniendo vehículo: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/vehicles/<int:vehicle_id>", methods=["PUT"])
+def update_vehicle_endpoint(vehicle_id):
+    """Actualizar un vehículo"""
+    if not db:
+        return jsonify({"error": "Base de datos no disponible"}), 500
+
+    try:
+        data = request.json
+
+        # Actualizar vehículo
+        success = db.update_vehicle(vehicle_id, **data)
+
+        if not success:
+            return jsonify({"error": "No se pudo actualizar el vehículo"}), 400
+
+        return jsonify({
+            "success": True,
+            "message": "Vehículo actualizado correctamente"
+        })
+
+    except Exception as e:
+        print(f"[API] Error actualizando vehículo: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/vehicles/<int:vehicle_id>", methods=["DELETE"])
+def delete_vehicle_endpoint(vehicle_id):
+    """Desactivar un vehículo"""
+    if not db:
+        return jsonify({"error": "Base de datos no disponible"}), 500
+
+    try:
+        success = db.delete_vehicle(vehicle_id, hard_delete=False)
+
+        if not success:
+            return jsonify({"error": "No se pudo desactivar el vehículo"}), 400
+
+        return jsonify({
+            "success": True,
+            "message": "Vehículo desactivado correctamente"
+        })
+
+    except Exception as e:
+        print(f"[API] Error desactivando vehículo: {e}")
+        return jsonify({"error": str(e)}), 500
+
+# --- ENDPOINTS DE VIAJES ---
+
+@app.route("/api/trips/start", methods=["POST"])
+def start_trip_endpoint():
+    """Iniciar un nuevo viaje"""
+    if not db:
+        return jsonify({"error": "Base de datos no disponible"}), 500
+
+    try:
+        data = request.json
+        vehicle_id = data.get('vehicle_id')
+
+        if not vehicle_id:
+            return jsonify({"error": "vehicle_id requerido"}), 400
+
+        trip_id = db.start_trip(vehicle_id)
+
+        return jsonify({
+            "success": True,
+            "trip_id": trip_id,
+            "message": "Viaje iniciado"
+        }), 201
+
+    except Exception as e:
+        print(f"[API] Error iniciando viaje: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/trips/<int:trip_id>/stop", methods=["POST"])
+def stop_trip_endpoint(trip_id):
+    """Finalizar un viaje"""
+    if not db:
+        return jsonify({"error": "Base de datos no disponible"}), 500
+
+    try:
+        data = request.json
+        stats = data.get('stats', {})
+
+        success = db.end_trip(trip_id, stats)
+
+        if not success:
+            return jsonify({"error": "No se pudo finalizar el viaje"}), 400
+
+        return jsonify({
+            "success": True,
+            "message": "Viaje finalizado"
+        })
+
+    except Exception as e:
+        print(f"[API] Error finalizando viaje: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/trips/<int:trip_id>/data", methods=["POST"])
+def save_trip_data_endpoint(trip_id):
+    """Guardar datos OBD del viaje"""
+    if not db:
+        return jsonify({"error": "Base de datos no disponible"}), 500
+
+    try:
+        data = request.json
+        data_points = data.get('data_points', [])
+
+        if not data_points:
+            return jsonify({"error": "No hay datos para guardar"}), 400
+
+        success = db.save_obd_data_batch(trip_id, data_points)
+
+        return jsonify({
+            "success": True,
+            "points_saved": len(data_points)
+        })
+
+    except Exception as e:
+        print(f"[API] Error guardando datos: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/vehicles/<int:vehicle_id>/trips", methods=["GET"])
+def get_vehicle_trips_endpoint(vehicle_id):
+    """Obtener historial de viajes de un vehículo"""
+    if not db:
+        return jsonify({"error": "Base de datos no disponible"}), 500
+
+    try:
+        limit = int(request.args.get('limit', 50))
+        trips = db.get_vehicle_trips(vehicle_id, limit=limit)
+
+        return jsonify({
+            "success": True,
+            "count": len(trips),
+            "trips": trips
+        })
+
+    except Exception as e:
+        print(f"[API] Error obteniendo viajes: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/trips/<int:trip_id>", methods=["GET"])
+def get_trip_endpoint(trip_id):
+    """Obtener detalles de un viaje"""
+    if not db:
+        return jsonify({"error": "Base de datos no disponible"}), 500
+
+    try:
+        trip = db.get_trip(trip_id)
+
+        if not trip:
+            return jsonify({"error": "Viaje no encontrado"}), 404
+
+        # Opcional: incluir datos OBD
+        include_obd = request.args.get('include_obd', 'false').lower() == 'true'
+        if include_obd:
+            trip['obd_data'] = db.get_trip_obd_data(trip_id)
+
+        return jsonify({
+            "success": True,
+            "trip": trip
+        })
+
+    except Exception as e:
+        print(f"[API] Error obteniendo viaje: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/vehicles/<int:vehicle_id>/stats", methods=["GET"])
+def get_vehicle_stats_endpoint(vehicle_id):
+    """Obtener estadísticas de un vehículo"""
+    if not db:
+        return jsonify({"error": "Base de datos no disponible"}), 500
+
+    try:
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+
+        stats = db.get_vehicle_stats(vehicle_id, start_date, end_date)
+
+        return jsonify({
+            "success": True,
+            "stats": stats
+        })
+
+    except Exception as e:
+        print(f"[API] Error obteniendo estadísticas: {e}")
+        return jsonify({"error": str(e)}), 500
+
+# --- ENDPOINTS DE MANTENIMIENTO ---
+
+@app.route("/api/maintenance", methods=["POST"])
+def add_maintenance_endpoint():
+    """Registrar mantenimiento"""
+    if not db:
+        return jsonify({"error": "Base de datos no disponible"}), 500
+
+    try:
+        data = request.json
+
+        # Validar campos requeridos
+        if 'vehicle_id' not in data or 'date' not in data or 'type' not in data:
+            return jsonify({"error": "Campos requeridos: vehicle_id, date, type"}), 400
+
+        maintenance_id = db.add_maintenance(
+            vehicle_id=int(data['vehicle_id']),
+            date=data['date'],
+            type=data['type'],
+            description=data.get('description'),
+            mileage=int(data.get('mileage', 0)) if data.get('mileage') else None,
+            cost=float(data.get('cost', 0)),
+            mechanic=data.get('mechanic'),
+            next_service_km=int(data.get('next_service_km', 0)) if data.get('next_service_km') else None
+        )
+
+        return jsonify({
+            "success": True,
+            "maintenance_id": maintenance_id,
+            "message": "Mantenimiento registrado"
+        }), 201
+
+    except Exception as e:
+        print(f"[API] Error registrando mantenimiento: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/vehicles/<int:vehicle_id>/maintenance", methods=["GET"])
+def get_vehicle_maintenance_endpoint(vehicle_id):
+    """Obtener historial de mantenimiento"""
+    if not db:
+        return jsonify({"error": "Base de datos no disponible"}), 500
+
+    try:
+        limit = int(request.args.get('limit', 50))
+        maintenance = db.get_vehicle_maintenance(vehicle_id, limit=limit)
+
+        return jsonify({
+            "success": True,
+            "count": len(maintenance),
+            "maintenance": maintenance
+        })
+
+    except Exception as e:
+        print(f"[API] Error obteniendo mantenimiento: {e}")
+        return jsonify({"error": str(e)}), 500
+
+# --- ENDPOINTS DE ANALYTICS ---
+
+@app.route("/api/analytics/<int:vehicle_id>", methods=["GET"])
+def get_analytics_endpoint(vehicle_id):
+    """Obtener datos para análisis y gráficos"""
+    if not db:
+        return jsonify({"error": "Base de datos no disponible"}), 500
+
+    try:
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+
+        # Obtener estadísticas
+        stats = db.get_vehicle_stats(vehicle_id, start_date, end_date)
+
+        # Preparar datos para Chart.js
+        trips = stats.get('trips', [])
+
+        # Datos para gráfico de línea temporal (health score)
+        health_timeline = {
+            'labels': [t.get('start_time', '')[:10] for t in trips],
+            'data': [t.get('health_score', 100) for t in trips]
+        }
+
+        # Datos para gráfico de barras (viajes por semana)
+        # ... se puede mejorar agrupando por semana
+
+        # Datos para gráfico circular (distribución conducción)
+        highway_km = sum(t.get('distance', 0) for t in trips if t.get('avg_speed', 0) > 80)
+        city_km = sum(t.get('distance', 0) for t in trips if t.get('avg_speed', 0) < 50)
+        road_km = sum(t.get('distance', 0) for t in trips if 50 <= t.get('avg_speed', 0) <= 80)
+
+        driving_distribution = {
+            'labels': ['Autopista', 'Ciudad', 'Carretera'],
+            'data': [highway_km, city_km, road_km]
+        }
+
+        return jsonify({
+            "success": True,
+            "vehicle_id": vehicle_id,
+            "stats": stats,
+            "charts": {
+                "health_timeline": health_timeline,
+                "driving_distribution": driving_distribution
+            }
+        })
+
+    except Exception as e:
+        print(f"[API] Error obteniendo analytics: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/fleet/stats", methods=["GET"])
+def get_fleet_stats_endpoint():
+    """Obtener estadísticas de toda la flota"""
+    if not db:
+        return jsonify({"error": "Base de datos no disponible"}), 500
+
+    try:
+        stats = db.get_fleet_stats()
+
+        return jsonify({
+            "success": True,
+            "fleet_stats": stats
+        })
+
+    except Exception as e:
+        print(f"[API] Error obteniendo estadísticas de flota: {e}")
+        return jsonify({"error": str(e)}), 500
+
+# --- ENDPOINTS DE ALERTAS ---
+
+@app.route("/api/alerts", methods=["POST"])
+def create_alert_endpoint():
+    """Crear una alerta"""
+    if not db:
+        return jsonify({"error": "Base de datos no disponible"}), 500
+
+    try:
+        data = request.json
+
+        alert_id = db.create_alert(
+            vehicle_id=int(data['vehicle_id']),
+            alert_type=data['alert_type'],
+            severity=data['severity'],
+            message=data['message'],
+            value=float(data.get('value')) if data.get('value') else None,
+            threshold=float(data.get('threshold')) if data.get('threshold') else None,
+            trip_id=int(data.get('trip_id')) if data.get('trip_id') else None
+        )
+
+        return jsonify({
+            "success": True,
+            "alert_id": alert_id
+        }), 201
+
+    except Exception as e:
+        print(f"[API] Error creando alerta: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/vehicles/<int:vehicle_id>/alerts", methods=["GET"])
+def get_vehicle_alerts_endpoint(vehicle_id):
+    """Obtener alertas de un vehículo"""
+    if not db:
+        return jsonify({"error": "Base de datos no disponible"}), 500
+
+    try:
+        acknowledged = request.args.get('acknowledged')
+        if acknowledged is not None:
+            acknowledged = acknowledged.lower() == 'true'
+
+        alerts = db.get_vehicle_alerts(vehicle_id, acknowledged)
+
+        return jsonify({
+            "success": True,
+            "count": len(alerts),
+            "alerts": alerts
+        })
+
+    except Exception as e:
+        print(f"[API] Error obteniendo alertas: {e}")
+        return jsonify({"error": str(e)}), 500
+
 if __name__ == "__main__":
     print("=" * 70)
-    print("SENTINEL PRO - MANTENIMIENTO PREDICTIVO v9.0")
+    print("SENTINEL PRO - SISTEMA DE FLOTAS v10.0")
     print("=" * 70)
     print(f"\n[CONFIG] Puerto OBD: {OBD_PORT}")
     print(f"[CONFIG] Modelo IA: {GEMINI_MODEL_NAME}")
@@ -793,9 +1255,14 @@ if __name__ == "__main__":
     print("  ✓ Scoring salud 0-100")
     print("  ✓ Detección patrones desgaste")
     print("  ✓ Predicción fallos con IA")
-    print("  ✓ Alertas tempranas")
     print("  ✓ Averías comunes por modelo")
     print("  ✓ Tasación inteligente")
+    print("\n[SISTEMA DE FLOTAS v10.0]")
+    print("  ✓ Base de datos SQLite con gestión multi-vehículo")
+    print("  ✓ API REST completa (vehículos, viajes, mantenimiento)")
+    print("  ✓ Análisis por tipo de transmisión")
+    print("  ✓ Estadísticas y analytics avanzados")
+    print("  ✓ Sistema de alertas configurables")
     
     initialize_obd_connection(force_reconnect=True)
     print("\n✓ Servidor activo en http://localhost:5000\n")
