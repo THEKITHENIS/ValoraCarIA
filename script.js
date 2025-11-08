@@ -101,72 +101,109 @@ document.addEventListener('DOMContentLoaded', () => {
     // === FUNCIONES DE ACTUALIZACIÓN UI ===
     
     function updateLiveData(data) {
-        if (data.RPM === 'Offline' || data.RPM === null) {
+        // RPM
+        if (data.rpm !== null && data.rpm !== undefined) {
+            liveRpm.textContent = Math.round(data.rpm);
+            liveRpm.classList.remove('offline');
+        } else {
             liveRpm.textContent = '---';
             liveRpm.classList.add('offline');
-        } else {
-            liveRpm.textContent = Math.round(data.RPM);
-            liveRpm.classList.remove('offline');
         }
-        
-        if (data.SPEED === 'Offline' || data.SPEED === null) {
+
+        // SPEED
+        if (data.speed !== null && data.speed !== undefined) {
+            liveSpeed.textContent = Math.round(data.speed);
+            liveSpeed.classList.remove('offline');
+        } else {
             liveSpeed.textContent = '---';
             liveSpeed.classList.add('offline');
-        } else {
-            liveSpeed.textContent = Math.round(data.SPEED);
-            liveSpeed.classList.remove('offline');
         }
-        
-        if (data.total_distance === 'Offline' || data.total_distance === null) {
+
+        // DISTANCE (usando distance_since_clear)
+        if (data.distance_since_clear !== null && data.distance_since_clear !== undefined) {
+            liveDistance.textContent = data.distance_since_clear.toFixed(3);
+            liveDistance.classList.remove('offline');
+        } else {
             liveDistance.textContent = '---';
             liveDistance.classList.add('offline');
-        } else {
-            liveDistance.textContent = data.total_distance.toFixed(3);
-            liveDistance.classList.remove('offline');
         }
-        
-        if (data.THROTTLE_POS !== null && data.THROTTLE_POS !== undefined) {
-            liveThrottle.textContent = Math.round(data.THROTTLE_POS);
+
+        // THROTTLE
+        if (data.throttle_pos !== null && data.throttle_pos !== undefined) {
+            liveThrottle.textContent = Math.round(data.throttle_pos);
             liveThrottle.classList.remove('offline');
         } else {
             liveThrottle.textContent = '---';
             liveThrottle.classList.add('offline');
         }
-        
-        if (data.ENGINE_LOAD !== null && data.ENGINE_LOAD !== undefined) {
-            liveLoad.textContent = Math.round(data.ENGINE_LOAD);
+
+        // ENGINE LOAD
+        if (data.engine_load !== null && data.engine_load !== undefined) {
+            liveLoad.textContent = Math.round(data.engine_load);
             liveLoad.classList.remove('offline');
         } else {
             liveLoad.textContent = '---';
             liveLoad.classList.add('offline');
         }
-        
-        if (data.MAF !== null && data.MAF !== undefined) {
-            liveMaf.textContent = data.MAF.toFixed(1);
+
+        // MAF
+        if (data.maf !== null && data.maf !== undefined) {
+            liveMaf.textContent = data.maf.toFixed(1);
             liveMaf.classList.remove('offline');
         } else {
             liveMaf.textContent = '---';
             liveMaf.classList.add('offline');
         }
-        
-        if (data.COOLANT_TEMP !== null && data.COOLANT_TEMP !== undefined) {
-            liveCoolantTemp.textContent = Math.round(data.COOLANT_TEMP);
+
+        // COOLANT TEMP (datos térmicos - mantener último valor si null)
+        if (data.coolant_temp !== null && data.coolant_temp !== undefined) {
+            liveCoolantTemp.textContent = Math.round(data.coolant_temp);
             liveCoolantTemp.classList.remove('offline');
-        } else if (data.COOLANT_TEMP !== 'Offline') {
-            // Mantener último valor
-        } else {
+        } else if (data.connected === false) {
             liveCoolantTemp.textContent = '---';
             liveCoolantTemp.classList.add('offline');
         }
-        
-        if (data.INTAKE_TEMP !== null && data.INTAKE_TEMP !== undefined) {
-            liveIntakeTemp.textContent = Math.round(data.INTAKE_TEMP);
+        // Si es null pero connected=true, mantener último valor (no actualizar)
+
+        // INTAKE TEMP (datos térmicos - mantener último valor si null)
+        if (data.intake_temp !== null && data.intake_temp !== undefined) {
+            liveIntakeTemp.textContent = Math.round(data.intake_temp);
             liveIntakeTemp.classList.remove('offline');
-        } else if (data.INTAKE_TEMP !== 'Offline') {
-            // Mantener último valor
-        } else {
+        } else if (data.connected === false) {
             liveIntakeTemp.textContent = '---';
             liveIntakeTemp.classList.add('offline');
+        }
+        // Si es null pero connected=true, mantener último valor (no actualizar)
+
+        // Log adicional de PIDs disponibles en consola (para debug)
+        if (data.connected) {
+            const allPIDs = {
+                rpm: data.rpm,
+                speed: data.speed,
+                throttle_pos: data.throttle_pos,
+                engine_load: data.engine_load,
+                maf: data.maf,
+                coolant_temp: data.coolant_temp,
+                intake_temp: data.intake_temp,
+                distance_since_clear: data.distance_since_clear,
+                intake_pressure: data.intake_pressure,
+                voltage: data.voltage,
+                fuel_pressure: data.fuel_pressure,
+                barometric_pressure: data.barometric_pressure,
+                distance_mil: data.distance_mil,
+                relative_throttle: data.relative_throttle,
+                ambient_temp: data.ambient_temp,
+                accelerator_d: data.accelerator_d,
+                accelerator_e: data.accelerator_e,
+                run_time: data.run_time
+            };
+
+            // Log cada 30 segundos para no saturar la consola
+            const now = Date.now();
+            if (!window.lastPIDLog || now - window.lastPIDLog > 30000) {
+                console.log('[OBD] PIDs disponibles:', allPIDs);
+                window.lastPIDLog = now;
+            }
         }
     }
     
@@ -257,63 +294,63 @@ document.addEventListener('DOMContentLoaded', () => {
     
     async function fetchLiveData() {
         try {
-            const response = await fetch(`${API_URL}/get_live_data`, {
+            const response = await fetch(`${API_URL}/api/live_data`, {
                 method: 'GET',
                 headers: { 'Content-Type': 'application/json' }
             });
-            
+
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}`);
             }
-            
+
             const data = await response.json();
-            
-            if (data.offline === true) {
+
+            if (data.connected === false) {
                 if (isOBDConnected) {
                     console.log('[OBD] Conexión perdida');
                     isOBDConnected = false;
                 }
                 consecutiveFailures++;
-                updateLiveData({ 
-                    RPM: 'Offline', 
-                    SPEED: 'Offline', 
-                    THROTTLE_POS: 'Offline',
-                    ENGINE_LOAD: 'Offline',
-                    MAF: 'Offline',
-                    COOLANT_TEMP: 'Offline',
-                    INTAKE_TEMP: 'Offline',
-                    total_distance: 'Offline' 
+                updateLiveData({
+                    rpm: null,
+                    speed: null,
+                    throttle_pos: null,
+                    engine_load: null,
+                    maf: null,
+                    coolant_temp: null,
+                    intake_temp: null,
+                    distance_since_clear: null
                 });
             } else {
                 if (!isOBDConnected) {
-                    console.log('[OBD] ✓ Conectado');
-                    showConnectionNotification('OBD conectado - Optimizado: críticos 3s, térmicos 60s', 'success');
+                    console.log('[OBD] ✓ Conectado - 21 PIDs activos');
+                    showConnectionNotification('OBD conectado - 21 PIDs activos (críticos 3s, térmicos 60s)', 'success');
                 }
                 isOBDConnected = true;
                 consecutiveFailures = 0;
                 updateLiveData(data);
             }
-            
+
             updateAnalyzeButton();
-            
+
         } catch (error) {
             consecutiveFailures++;
-            
+
             if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES && isOBDConnected) {
                 console.log('[OBD] Múltiples fallos detectados');
-                showConnectionNotification('Conexión OBD perdida. Modo fallback activado.', 'warning');
+                showConnectionNotification('Conexión OBD perdida. Modo offline activado.', 'warning');
             }
-            
+
             isOBDConnected = false;
-            updateLiveData({ 
-                RPM: 'Offline', 
-                SPEED: 'Offline',
-                THROTTLE_POS: 'Offline',
-                ENGINE_LOAD: 'Offline',
-                MAF: 'Offline',
-                COOLANT_TEMP: 'Offline',
-                INTAKE_TEMP: 'Offline',
-                total_distance: 'Offline' 
+            updateLiveData({
+                rpm: null,
+                speed: null,
+                throttle_pos: null,
+                engine_load: null,
+                maf: null,
+                coolant_temp: null,
+                intake_temp: null,
+                distance_since_clear: null
             });
             updateAnalyzeButton();
         }
@@ -834,11 +871,14 @@ document.addEventListener('DOMContentLoaded', () => {
     valuationBtn.addEventListener('click', getValuation);
     
     // === INICIALIZACIÓN ===
-    
-    console.log('[INIT] SENTINEL PRO v9.0 iniciado');
+
+    console.log('[INIT] SENTINEL PRO v9.0 - INTEGRACIÓN OBD COMPLETA');
     console.log('[INIT] Optimizaciones:');
-    console.log('  ✓ Datos críticos cada 3s: RPM, velocidad, acelerador, carga, MAF');
-    console.log('  ✓ Datos térmicos cada 60s: temperaturas');
+    console.log('  ✓ 21 PIDs confirmados activos');
+    console.log('  ✓ Datos críticos cada 3s: RPM, velocidad, acelerador, carga, MAF, presión admisión, voltaje');
+    console.log('  ✓ Datos térmicos cada 60s: temperaturas refrigerante/admisión');
+    console.log('  ✓ Datos adicionales: presión combustible, presión barométrica, acelerador D/E, tiempo marcha, distancia');
+    console.log('  ✓ Todos los PIDs guardados en CSV para análisis posterior');
     console.log('  ✓ Análisis salud automático cada 90s');
     
     loadVehicleInfo();

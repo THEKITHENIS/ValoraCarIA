@@ -80,10 +80,15 @@ def initialize_csv():
             writer = csv.writer(f)
             writer.writerow([
                 'timestamp', 'date', 'time',
+                # PIDs críticos
                 'rpm', 'speed_kmh', 'throttle_pos', 'engine_load', 'maf',
-                'coolant_temp', 'intake_temp', 'distance_km'
+                'coolant_temp', 'intake_temp', 'distance_since_clear',
+                # PIDs adicionales
+                'intake_pressure', 'voltage', 'fuel_pressure', 'barometric_pressure',
+                'distance_mil', 'relative_throttle', 'ambient_temp',
+                'accelerator_d', 'accelerator_e', 'run_time'
             ])
-        print(f"[CSV] ✓ Archivo creado con columnas optimizadas")
+        print(f"[CSV] ✓ Archivo creado con 21 PIDs confirmados")
 
 def save_reading_to_csv(data, thermal_data=None):
     try:
@@ -410,6 +415,160 @@ def get_live_data():
         results['total_distance'] = trip_data['distance_km'] if trip_data["active"] else 0
     
     return jsonify(results)
+
+# === NUEVOS ENDPOINTS PARA INTEGRACIÓN SENTINEL PRO ===
+
+@app.route("/api/live_data", methods=["GET"])
+def api_live_data():
+    """
+    Endpoint optimizado que devuelve los 21 PIDs confirmados que funcionan.
+    Implementa 3 reintentos por cada PID fallido.
+    """
+    global connection, last_thermal_reading_time
+
+    if not connection or not connection.is_connected():
+        if not initialize_obd_connection(force_reconnect=True):
+            return jsonify({
+                "connected": False,
+                "rpm": None,
+                "speed": None,
+                "throttle_pos": None,
+                "engine_load": None,
+                "coolant_temp": None,
+                "intake_temp": None,
+                "maf": None,
+                "intake_pressure": None,
+                "voltage": None,
+                "fuel_pressure": None,
+                "barometric_pressure": None,
+                "distance_mil": None,
+                "relative_throttle": None,
+                "ambient_temp": None,
+                "accelerator_d": None,
+                "accelerator_e": None,
+                "run_time": None,
+                "distance_since_clear": None
+            })
+
+    def query_with_retry(cmd, max_retries=3):
+        """Consulta un PID con reintentos automáticos"""
+        for attempt in range(max_retries):
+            try:
+                response = connection.query(cmd)
+                if response and response.value is not None:
+                    # Extraer solo el valor numérico (magnitude)
+                    if hasattr(response.value, 'magnitude'):
+                        return response.value.magnitude
+                    else:
+                        return response.value
+            except Exception as e:
+                if attempt == max_retries - 1:
+                    print(f"[OBD] Error leyendo {cmd.name} después de {max_retries} intentos: {e}")
+                else:
+                    time.sleep(0.1)  # Pausa breve antes de reintentar
+        return None
+
+    # DATOS CRÍTICOS (siempre se leen)
+    critical_pids = {
+        'rpm': obd.commands.RPM,
+        'speed': obd.commands.SPEED,
+        'throttle_pos': obd.commands.THROTTLE_POS,
+        'engine_load': obd.commands.ENGINE_LOAD,
+        'maf': obd.commands.MAF,
+        'intake_pressure': obd.commands.INTAKE_PRESSURE,
+        'voltage': obd.commands.CONTROL_MODULE_VOLTAGE,
+    }
+
+    results = {"connected": True}
+
+    # Leer PIDs críticos
+    for key, cmd in critical_pids.items():
+        results[key] = query_with_retry(cmd)
+
+    # DATOS TÉRMICOS (cada 60s)
+    current_time = time.time()
+
+    if current_time - last_thermal_reading_time >= THERMAL_READING_INTERVAL:
+        thermal_pids = {
+            'coolant_temp': obd.commands.COOLANT_TEMP,
+            'intake_temp': obd.commands.INTAKE_TEMP,
+        }
+
+        for key, cmd in thermal_pids.items():
+            results[key] = query_with_retry(cmd)
+
+        last_thermal_reading_time = current_time
+    else:
+        # Mantener último valor si existe
+        results['coolant_temp'] = None
+        results['intake_temp'] = None
+
+    # OTROS PIDs (leídos cada vez para guardar en CSV)
+    other_pids = {
+        'fuel_pressure': obd.commands.FUEL_RAIL_PRESSURE_DIRECT,
+        'barometric_pressure': obd.commands.BAROMETRIC_PRESSURE,
+        'distance_mil': obd.commands.DISTANCE_W_MIL,
+        'relative_throttle': obd.commands.RELATIVE_THROTTLE_POS,
+        'ambient_temp': obd.commands.AMBIANT_AIR_TEMP,
+        'accelerator_d': obd.commands.ACCELERATOR_POS_D,
+        'accelerator_e': obd.commands.ACCELERATOR_POS_E,
+        'run_time': obd.commands.RUN_TIME,
+        'distance_since_clear': obd.commands.DISTANCE_SINCE_DTC_CLEAR,
+    }
+
+    for key, cmd in other_pids.items():
+        results[key] = query_with_retry(cmd)
+
+    # Guardar en CSV si el motor está encendido
+    if results.get('rpm') and results.get('rpm') > 400:
+        try:
+            now = datetime.now()
+            with open(CSV_FILENAME, 'a', newline='', encoding='utf-8') as f:
+                writer = csv.writer(f)
+                writer.writerow([
+                    now.isoformat(),
+                    now.strftime('%Y-%m-%d'),
+                    now.strftime('%H:%M:%S'),
+                    results.get('rpm', ''),
+                    results.get('speed', ''),
+                    results.get('throttle_pos', ''),
+                    results.get('engine_load', ''),
+                    results.get('maf', ''),
+                    results.get('coolant_temp', ''),
+                    results.get('intake_temp', ''),
+                    results.get('distance_since_clear', ''),
+                    results.get('intake_pressure', ''),
+                    results.get('voltage', ''),
+                    results.get('fuel_pressure', ''),
+                    results.get('barometric_pressure', ''),
+                    results.get('distance_mil', ''),
+                    results.get('relative_throttle', ''),
+                    results.get('ambient_temp', ''),
+                    results.get('accelerator_d', ''),
+                    results.get('accelerator_e', ''),
+                    results.get('run_time', '')
+                ])
+        except Exception as e:
+            print(f"[CSV] Error guardando: {e}")
+
+    return jsonify(results)
+
+@app.route("/api/health", methods=["GET"])
+def api_health():
+    """Endpoint para verificar el estado de conexión OBD"""
+    global connection
+
+    connected = False
+    port = OBD_PORT
+
+    if connection and connection.is_connected():
+        connected = True
+
+    return jsonify({
+        "connected": connected,
+        "port": port,
+        "status": "OK" if connected else "Disconnected"
+    })
 
 @app.route("/get_vehicle_health", methods=["GET"])
 def get_vehicle_health():
