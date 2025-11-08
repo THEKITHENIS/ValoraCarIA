@@ -21,7 +21,7 @@ import statistics
 
 # ----- CONFIGURACIÓN OBLIGATORIA -----
 OBD_PORT = "COM6"  # CAMBIA ESTO A TU PUERTO
-GEMINI_API_KEY = "AIzaSyDMtGE41CV8SbFzmWG8a6oPQgVf58k8HLE"  # TU API KEY
+GEMINI_API_KEY = "TU_GEMINI_API_KEY"  # TU API KEY
 GEMINI_MODEL_NAME = "models/gemini-pro-latest"
 # -------------------------------------
 
@@ -799,4 +799,5 @@ if __name__ == "__main__":
     
     initialize_obd_connection(force_reconnect=True)
     print("\n✓ Servidor activo en http://localhost:5000\n")
+
     app.run(host='0.0.0.0', port=5000, debug=False)
