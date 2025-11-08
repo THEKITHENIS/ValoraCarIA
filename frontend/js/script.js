@@ -13,8 +13,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const vehicleModel = document.getElementById('vehicleModel');
     const vehicleYear = document.getElementById('vehicleYear');
     const vehicleMileage = document.getElementById('vehicleMileage');
+    const vehicleTransmission = document.getElementById('vehicleTransmission');
     const vehicleType = document.getElementById('vehicleType');
-    const vehicleDataInputs = [vehicleBrand, vehicleModel, vehicleYear, vehicleMileage, vehicleType];
+    const vehicleDataInputs = [vehicleBrand, vehicleModel, vehicleYear, vehicleMileage, vehicleTransmission, vehicleType];
     
     // Referencias DOM - Datos en vivo
     const liveRpm = document.getElementById('live_rpm');
@@ -69,6 +70,7 @@ document.addEventListener('DOMContentLoaded', () => {
             model: vehicleModel.value,
             year: vehicleYear.value,
             mileage: vehicleMileage.value,
+            transmission: vehicleTransmission.value,
             type: vehicleType.value
         };
         localStorage.setItem('vehicleInfo', JSON.stringify(vehicleInfo));
@@ -82,6 +84,7 @@ document.addEventListener('DOMContentLoaded', () => {
             vehicleModel.value = vehicleInfo.model || '';
             vehicleYear.value = vehicleInfo.year || '';
             vehicleMileage.value = vehicleInfo.mileage || '';
+            vehicleTransmission.value = vehicleInfo.transmission || 'manual';
             vehicleType.value = vehicleInfo.type || 'gasolina';
         }
     }
@@ -92,6 +95,7 @@ document.addEventListener('DOMContentLoaded', () => {
             model: vehicleModel.value,
             year: vehicleYear.value,
             type: vehicleType.value,
+            transmission: vehicleTransmission.value,
             mileage: vehicleMileage.value
         };
     }
