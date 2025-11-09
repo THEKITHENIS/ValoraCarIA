@@ -21,18 +21,18 @@ ValoraCarIA/
 │   ├── database.py             # Gestor de base de datos SQLite
 │   └── requirements.txt        # Dependencias Python
 ├── frontend/
-│   ├── index.html              # Dashboard principal
-│   ├── fleet.html              # Gestión de flotas (pendiente)
-│   ├── analytics.html          # Análisis y gráficos (pendiente)
-│   ├── vehicle-detail.html     # Detalles de vehículo (pendiente)
+│   ├── index.html              # Dashboard principal ✅
+│   ├── fleet.html              # Gestión de flotas ✅
+│   ├── analytics.html          # Análisis y gráficos ✅
+│   ├── vehicle-detail.html     # Detalles de vehículo ✅
 │   ├── css/
-│   │   ├── style.css           # Estilos principales
-│   │   └── fleet.css           # Estilos de flotas (pendiente)
+│   │   ├── style.css           # Estilos principales ✅
+│   │   └── fleet.css           # Estilos de flotas ✅
 │   └── js/
 │       ├── common.js           # Funciones compartidas ✅
-│       ├── script.js           # Lógica principal
-│       ├── fleet.js            # Gestión de flotas (pendiente)
-│       └── analytics.js        # Visualización de datos (pendiente)
+│       ├── script.js           # Lógica principal + GPS ✅
+│       ├── fleet.js            # Gestión de flotas ✅
+│       └── analytics.js        # (integrado en analytics.html) ✅
 ├── db/
 │   └── sentinel.db             # Base de datos SQLite ✅
 └── exports/
@@ -380,14 +380,51 @@ GET    /api/fleet/stats                  - Estadísticas de flota
   - Validación de velocidades
   - Preparado para mapas Leaflet.js
 
+### 7. **Mapas Interactivos con Leaflet.js** ✅
+- [x] **Visualización de rutas GPS en analytics.html**
+  - Mapa interactivo con OpenStreetMap tiles
+  - Polilíneas de colores para múltiples rutas
+  - Marcadores de inicio (verde) y fin (rojo)
+  - Popups informativos con datos del viaje
+  - Selector de viajes individual o todos
+  - Botón de centrado automático del mapa
+  - Panel de estadísticas del viaje seleccionado
+  - Zoom y pan interactivos
+  - Integración con datos GPS de BD
+
+### 8. **Página de Detalles de Vehículo (vehicle-detail.html)** ✅
+- [x] **Vista completa individual por vehículo**
+  - Tarjeta de información: VIN, año, combustible, transmisión
+  - KPIs específicos: viajes, distancia, velocidad media, salud
+  - Gráficos Chart.js: distancia por viaje, evolución de salud
+  - Mapa del último viaje con ruta completa
+  - Historial completo de viajes en tabla
+  - Historial de mantenimiento
+  - Selector de límite de viajes (10/25/50/100)
+  - Botones de edición y para iniciar viaje
+  - Responsive design
+  - Integración completa con API
+
+### 9. **Exportación a Excel Avanzada** ✅
+- [x] **Reportes profesionales multi-hoja**
+  - Librería SheetJS integrada
+  - Hoja 1 - Resumen: datos vehículo + estadísticas
+  - Hoja 2 - Viajes: tabla completa detallada
+  - Hoja 3 - Datos Gráficos: datos numéricos
+  - Formato profesional con anchos de columna
+  - Nombre de archivo descriptivo con fecha
+  - Fechas localizadas a español
+  - Validación y notificaciones
+  - Botón de exportación en analytics.html
+
 ## 📝 Próximas Mejoras
 
-### Alta Prioridad
-- [ ] Activar GPS automáticamente al iniciar viaje
-- [ ] Mapas interactivos con Leaflet.js en viajes
-- [ ] vehicle-detail.html con gráficos individuales
-- [ ] Exportación a Excel desde analytics
-- [ ] Guardado automático de coordenadas GPS en BD
+### Alta Prioridad ✅ (COMPLETADO)
+- [x] Activar GPS automáticamente al iniciar viaje
+- [x] Mapas interactivos con Leaflet.js en viajes
+- [x] vehicle-detail.html con gráficos individuales
+- [x] Exportación a Excel desde analytics
+- [x] Guardado automático de coordenadas GPS en BD
 
 ### Media Prioridad
 - [ ] Sistema de alertas en tiempo real
