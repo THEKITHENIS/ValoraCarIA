@@ -362,16 +362,32 @@ GET    /api/fleet/stats                  - Estadísticas de flota
 ### Mejoras en Análisis IA
 - [x] Campo de tipo de transmisión en formulario
 - [x] Guardado de transmisión en localStorage
-- [x] Preparación para análisis específico por transmisión
+- [x] **Análisis IA completo por tipo de transmisión**
+  - Manual: Desgaste embrague, sincronización cambios
+  - Automática: Suavidad cambios, fluido ATF
+  - DSG/DCT: Cambios rápidos, mecatrónica
+  - CVT: Eficiencia variable, correa/cadena
+
+### Sistema GPS Integrado
+- [x] **Tracking GPS en tiempo real**
+  - watchPosition con alta precisión
+  - Cálculo distancia con Haversine
+  - Filtrado de datos erróneos
+  - Priorización GPS sobre OBD
+  - Almacenamiento de coordenadas (lat, lon)
+  - Logging detallado cada 10 posiciones
+  - Conversión m/s → km/h
+  - Validación de velocidades
+  - Preparado para mapas Leaflet.js
 
 ## 📝 Próximas Mejoras
 
 ### Alta Prioridad
-- [ ] Integración GPS completa en script.js con Haversine
+- [ ] Activar GPS automáticamente al iniciar viaje
 - [ ] Mapas interactivos con Leaflet.js en viajes
-- [ ] Mejorar prompt IA con análisis detallado de transmisión
 - [ ] vehicle-detail.html con gráficos individuales
 - [ ] Exportación a Excel desde analytics
+- [ ] Guardado automático de coordenadas GPS en BD
 
 ### Media Prioridad
 - [ ] Sistema de alertas en tiempo real
