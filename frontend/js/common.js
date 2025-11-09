@@ -739,4 +739,43 @@ window.SENTINEL = {
     Debug
 };
 
+// =============================================================================
+// INICIALIZACIÓN DE NAVBAR (MARCAR PÁGINA ACTIVA)
+// =============================================================================
+
+// Marcar página activa en navbar
+document.addEventListener('DOMContentLoaded', () => {
+    const currentPage = window.location.pathname.split('/').pop() || 'index.html';
+    const navLinks = document.querySelectorAll('.nav-link');
+
+    navLinks.forEach(link => {
+        const href = link.getAttribute('href');
+        if (href === currentPage) {
+            link.classList.add('active');
+        }
+    });
+
+    // Mostrar link de vehicle-detail solo si hay un vehículo activo en localStorage
+    const activeVehicleId = localStorage.getItem('activeVehicleId');
+    if (activeVehicleId) {
+        const vehicleDetailLink = document.getElementById('nav-vehicle-detail');
+        if (vehicleDetailLink) {
+            vehicleDetailLink.style.display = 'flex';
+            vehicleDetailLink.href = `vehicle-detail.html?id=${activeVehicleId}`;
+        }
+    }
+
+    // Mostrar link de importación solo si import.html existe
+    fetch('import.html', {method: 'HEAD'})
+        .then(res => {
+            if (res.ok) {
+                const importLink = document.getElementById('nav-import');
+                if (importLink) {
+                    importLink.style.display = 'flex';
+                }
+            }
+        })
+        .catch(() => {});
+});
+
 console.log('[SENTINEL COMMON] ✓ Módulo cargado correctamente');
