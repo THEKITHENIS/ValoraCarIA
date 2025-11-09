@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SENTINEL PRO - Gestión de Flotas</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/fleet.css">
+</head>
+<body>
+    <!-- HEADER CON NAVEGACIÓN -->
+    <header class="fleet-header">
+        <div class="header-content">
+            <div class="header-left">
+                <h1>
+                    <i class="fas fa-shield-halved"></i>
+                    SENTINEL PRO
+                </h1>
+                <p>Sistema de Gestión de Flotas</p>
+            </div>
+            <nav class="main-nav">
+                <a href="index.html" class="nav-link">
+                    <i class="fas fa-tachometer-alt"></i>
+                    <span>Dashboard</span>
+                </a>
+                <a href="fleet.html" class="nav-link active">
+                    <i class="fas fa-cars"></i>
+                    <span>Flotas</span>
+                </a>
+                <a href="analytics.html" class="nav-link">
+                    <i class="fas fa-chart-line"></i>
+                    <span>Análisis</span>
+                </a>
+            </nav>
+        </div>
+    </header>
+
+    <!-- ESTADÍSTICAS RÁPIDAS DE FLOTA -->
+    <div class="fleet-stats-banner">
+        <div class="stat-card-mini">
+            <i class="fas fa-car"></i>
+            <div>
+                <span class="stat-value" id="total_vehicles">0</span>
+                <span class="stat-label">Vehículos Activos</span>
+            </div>
+        </div>
+        <div class="stat-card-mini">
+            <i class="fas fa-route"></i>
+            <div>
+                <span class="stat-value" id="total_trips">0</span>
+                <span class="stat-label">Viajes Totales</span>
+            </div>
+        </div>
+        <div class="stat-card-mini">
+            <i class="fas fa-road"></i>
+            <div>
+                <span class="stat-value" id="total_distance">0</span>
+                <span class="stat-label">km Recorridos</span>
+            </div>
+        </div>
+        <div class="stat-card-mini">
+            <i class="fas fa-clock"></i>
+            <div>
+                <span class="stat-value" id="active_trips">0</span>
+                <span class="stat-label">Viajes Activos</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- CONTENEDOR PRINCIPAL -->
+    <div class="container fleet-container">
+
+        <!-- SECCIÓN DE FILTROS -->
+        <div class="card filters-card">
+            <div class="filters-header">
+                <h2><i class="fas fa-filter"></i> Filtros</h2>
+                <button id="clearFiltersBtn" class="btn-text">
+                    <i class="fas fa-times"></i> Limpiar
+                </button>
+            </div>
+            <div class="filters-grid">
+                <div class="filter-group">
+                    <label><i class="fas fa-car"></i> Marca</label>
+                    <select id="filterBrand">
+                        <option value="">Todas las marcas</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label><i class="fas fa-droplet"></i> Combustible</label>
+                    <select id="filterFuel">
+                        <option value="">Todos</option>
+                        <option value="gasolina">Gasolina</option>
+                        <option value="diesel">Diésel</option>
+                        <option value="hibrido">Híbrido</option>
+                        <option value="electrico">Eléctrico</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label><i class="fas fa-gears"></i> Transmisión</label>
+                    <select id="filterTransmission">
+                        <option value="">Todas</option>
+                        <option value="manual">Manual</option>
+                        <option value="automatica">Automática</option>
+                        <option value="dsg">DSG/DCT</option>
+                        <option value="cvt">CVT</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label><i class="fas fa-heartbeat"></i> Estado Salud</label>
+                    <select id="filterHealth">
+                        <option value="">Todos</option>
+                        <option value="excellent">Excelente (80-100)</option>
+                        <option value="good">Bueno (60-79)</option>
+                        <option value="warning">Atención (40-59)</option>
+                        <option value="critical">Crítico (0-39)</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- VISTA DE VEHÍCULOS -->
+        <div class="vehicles-section">
+            <div class="section-header">
+                <h2><i class="fas fa-cars"></i> Mis Vehículos</h2>
+                <div class="view-controls">
+                    <button id="viewGrid" class="view-btn active" title="Vista de tarjetas">
+                        <i class="fas fa-th-large"></i>
+                    </button>
+                    <button id="viewList" class="view-btn" title="Vista de lista">
+                        <i class="fas fa-list"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- GRID DE VEHÍCULOS -->
+            <div id="vehiclesGrid" class="vehicles-grid">
+                <!-- Placeholder -->
+                <div class="loading-placeholder">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    <p>Cargando vehículos...</p>
+                </div>
+            </div>
+
+            <!-- MENSAJE SI NO HAY VEHÍCULOS -->
+            <div id="noVehiclesMessage" class="no-vehicles" style="display: none;">
+                <i class="fas fa-car-side"></i>
+                <h3>No hay vehículos en tu flota</h3>
+                <p>Añade tu primer vehículo para comenzar a monitorear su salud y rendimiento</p>
+                <button id="addFirstVehicleBtn" class="btn btn-primary">
+                    <i class="fas fa-plus-circle"></i>
+                    Añadir Primer Vehículo
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- BOTÓN FLOTANTE AÑADIR VEHÍCULO -->
+    <button id="addVehicleFloatingBtn" class="floating-btn" title="Añadir vehículo">
+        <i class="fas fa-plus"></i>
+    </button>
+
+    <!-- MODAL AÑADIR/EDITAR VEHÍCULO -->
+    <div id="vehicleModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalTitle">
+                    <i class="fas fa-car-side"></i>
+                    Añadir Vehículo
+                </h2>
+                <button class="modal-close" id="closeModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="vehicleForm">
+                    <input type="hidden" id="vehicleId">
+
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="vehicleVin">
+                                <i class="fas fa-barcode"></i> VIN (opcional)
+                            </label>
+                            <input type="text" id="vehicleVin" placeholder="Ej: WVWZZZ1KZBW123456" maxlength="17">
+                            <small>Número de identificación del vehículo (17 caracteres)</small>
+                        </div>
+                    </div>
+
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="vehicleBrandModal">
+                                <i class="fas fa-car"></i> Marca *
+                            </label>
+                            <input type="text" id="vehicleBrandModal" placeholder="Ej: Seat" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="vehicleModelModal">
+                                <i class="fas fa-cogs"></i> Modelo *
+                            </label>
+                            <input type="text" id="vehicleModelModal" placeholder="Ej: León 2.0 TDI" required>
+                        </div>
+                    </div>
+
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="vehicleYearModal">
+                                <i class="fas fa-calendar"></i> Año *
+                            </label>
+                            <input type="number" id="vehicleYearModal" placeholder="2018" min="1996" max="2026" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="vehicleMileageModal">
+                                <i class="fas fa-road"></i> Kilometraje
+                            </label>
+                            <input type="number" id="vehicleMileageModal" placeholder="95000" min="0">
+                        </div>
+                    </div>
+
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="vehicleTransmissionModal">
+                                <i class="fas fa-gears"></i> Transmisión *
+                            </label>
+                            <select id="vehicleTransmissionModal" required>
+                                <option value="manual">Manual</option>
+                                <option value="automatica">Automática</option>
+                                <option value="dsg">DSG/DCT</option>
+                                <option value="cvt">CVT</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="vehicleFuelModal">
+                                <i class="fas fa-droplet"></i> Combustible *
+                            </label>
+                            <select id="vehicleFuelModal" required>
+                                <option value="gasolina">Gasolina</option>
+                                <option value="diesel">Diésel</option>
+                                <option value="hibrido">Híbrido</option>
+                                <option value="electrico">Eléctrico</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="vehicleNotes">
+                            <i class="fas fa-note-sticky"></i> Notas
+                        </label>
+                        <textarea id="vehicleNotes" rows="3" placeholder="Observaciones adicionales..."></textarea>
+                    </div>
+
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" id="cancelBtn">
+                            Cancelar
+                        </button>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save"></i>
+                            Guardar Vehículo
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL CONFIRMACIÓN ELIMINAR -->
+    <div id="deleteModal" class="modal">
+        <div class="modal-content modal-small">
+            <div class="modal-header">
+                <h2>
+                    <i class="fas fa-exclamation-triangle"></i>
+                    Confirmar Eliminación
+                </h2>
+                <button class="modal-close" id="closeDeleteModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p>¿Estás seguro de que deseas eliminar este vehículo?</p>
+                <p id="deleteVehicleName" class="delete-vehicle-name"></p>
+                <p class="warning-text">
+                    <i class="fas fa-info-circle"></i>
+                    El vehículo será desactivado pero sus datos se conservarán en el historial.
+                </p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="cancelDeleteBtn">
+                    Cancelar
+                </button>
+                <button class="btn btn-danger" id="confirmDeleteBtn">
+                    <i class="fas fa-trash"></i>
+                    Eliminar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- FOOTER -->
+    <footer>
+        <p>SENTINEL PRO v10.0 - Sistema de Gestión de Flotas © 2025</p>
+        <p style="font-size: 0.8rem; margin-top: 0.5rem; opacity: 0.7;">
+            Gestión multi-vehículo | Base de datos SQLite | API REST completa
+        </p>
+    </footer>
+
+    <script src="js/common.js"></script>
+    <script src="js/fleet.js"></script>
+</body>
+</html>

@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SENTINEL PRO - Sistema de Mantenimiento Predictivo</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
     <!-- HEADER -->
@@ -42,6 +42,15 @@
                 <div class="form-group">
                     <label for="vehicleMileage"><i class="fas fa-road"></i> Kilómetros</label>
                     <input type="number" id="vehicleMileage" placeholder="Ej: 95000">
+                </div>
+                <div class="form-group">
+                    <label for="vehicleTransmission"><i class="fas fa-gears"></i> Transmisión</label>
+                    <select id="vehicleTransmission">
+                        <option value="manual">Manual</option>
+                        <option value="automatica">Automática</option>
+                        <option value="dsg">DSG/DCT</option>
+                        <option value="cvt">CVT</option>
+                    </select>
                 </div>
                 <div class="form-group">
                     <label for="vehicleType"><i class="fas fa-droplet"></i> Combustible</label>
@@ -284,6 +293,7 @@
         </p>
     </footer>
 
-    <script src="script.js"></script>
+    <script src="js/common.js"></script>
+    <script src="js/script.js"></script>
 </body>
 </html>
