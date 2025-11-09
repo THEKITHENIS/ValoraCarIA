@@ -841,6 +841,16 @@ csv_importer = CSVImporter(db) if db else None
 if csv_importer:
     print("[CSV-IMPORTER] ✓ CSVImporter inicializado")
 
+# Inicializar Alert Monitor
+alert_monitor = None
+try:
+    from alert_monitor import AlertMonitor
+    alert_monitor = AlertMonitor(db) if db else None
+    if alert_monitor:
+        print("[ALERT-MONITOR] ✓ AlertMonitor inicializado")
+except Exception as e:
+    print(f"[ALERT-MONITOR] ⚠️  Error cargando AlertMonitor: {e}")
+
 # --- ENDPOINTS DE VEHÍCULOS ---
 
 @app.route("/api/vehicles", methods=["POST"])
@@ -1286,6 +1296,264 @@ def get_vehicle_alerts_endpoint(vehicle_id):
 
     except Exception as e:
         print(f"[API] Error obteniendo alertas: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/alerts", methods=["GET"])
+def get_all_alerts_endpoint():
+    """Obtener todas las alertas de la flota"""
+    if not db:
+        return jsonify({"error": "Base de datos no disponible"}), 500
+
+    try:
+        acknowledged = request.args.get('acknowledged')
+        if acknowledged is not None:
+            acknowledged = acknowledged.lower() == 'true'
+
+        limit = int(request.args.get('limit', 100))
+
+        alerts = db.get_all_alerts(acknowledged, limit)
+
+        return jsonify({
+            "success": True,
+            "count": len(alerts),
+            "alerts": alerts
+        })
+
+    except Exception as e:
+        print(f"[API] Error obteniendo todas las alertas: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/alerts/<int:alert_id>/acknowledge", methods=["POST"])
+def acknowledge_alert_endpoint(alert_id):
+    """Marcar una alerta como reconocida"""
+    if not db:
+        return jsonify({"error": "Base de datos no disponible"}), 500
+
+    try:
+        success = db.acknowledge_alert(alert_id)
+
+        if success:
+            return jsonify({
+                "success": True,
+                "message": "Alerta reconocida correctamente"
+            })
+        else:
+            return jsonify({"error": "Alerta no encontrada"}), 404
+
+    except Exception as e:
+        print(f"[API] Error reconociendo alerta: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/alerts/acknowledge-all", methods=["POST"])
+def acknowledge_all_alerts_endpoint():
+    """Marcar todas las alertas como reconocidas"""
+    if not db:
+        return jsonify({"error": "Base de datos no disponible"}), 500
+
+    try:
+        data = request.json or {}
+        vehicle_id = data.get('vehicle_id')
+
+        count = db.acknowledge_all_alerts(vehicle_id)
+
+        return jsonify({
+            "success": True,
+            "acknowledged_count": count,
+            "message": f"{count} alertas reconocidas"
+        })
+
+    except Exception as e:
+        print(f"[API] Error reconociendo todas las alertas: {e}")
+        return jsonify({"error": str(e)}), 500
+
+# --- ENDPOINTS DE REGLAS DE ALERTAS ---
+
+@app.route("/api/alert-rules", methods=["POST"])
+def create_alert_rule_endpoint():
+    """Crear una regla de alerta"""
+    if not db:
+        return jsonify({"error": "Base de datos no disponible"}), 500
+
+    try:
+        data = request.json
+
+        rule_id = db.create_alert_rule(
+            vehicle_id=int(data.get('vehicle_id')) if data.get('vehicle_id') else None,
+            name=data['name'],
+            parameter=data['parameter'],
+            condition=data['condition'],
+            threshold=float(data['threshold']),
+            severity=data['severity'],
+            message_template=data.get('message_template'),
+            notify_email=data.get('notify_email', False),
+            notify_sound=data.get('notify_sound', True)
+        )
+
+        return jsonify({
+            "success": True,
+            "rule_id": rule_id,
+            "message": "Regla de alerta creada correctamente"
+        }), 201
+
+    except Exception as e:
+        print(f"[API] Error creando regla de alerta: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/alert-rules", methods=["GET"])
+def get_alert_rules_endpoint():
+    """Obtener reglas de alertas"""
+    if not db:
+        return jsonify({"error": "Base de datos no disponible"}), 500
+
+    try:
+        vehicle_id = request.args.get('vehicle_id')
+        if vehicle_id:
+            vehicle_id = int(vehicle_id)
+
+        enabled_only = request.args.get('enabled_only', 'true').lower() == 'true'
+
+        rules = db.get_alert_rules(vehicle_id, enabled_only)
+
+        return jsonify({
+            "success": True,
+            "count": len(rules),
+            "rules": rules
+        })
+
+    except Exception as e:
+        print(f"[API] Error obteniendo reglas de alertas: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/alert-rules/<int:rule_id>", methods=["GET"])
+def get_alert_rule_endpoint(rule_id):
+    """Obtener una regla de alerta por ID"""
+    if not db:
+        return jsonify({"error": "Base de datos no disponible"}), 500
+
+    try:
+        rule = db.get_alert_rule(rule_id)
+
+        if rule:
+            return jsonify({
+                "success": True,
+                "rule": rule
+            })
+        else:
+            return jsonify({"error": "Regla no encontrada"}), 404
+
+    except Exception as e:
+        print(f"[API] Error obteniendo regla de alerta: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/alert-rules/<int:rule_id>", methods=["PUT"])
+def update_alert_rule_endpoint(rule_id):
+    """Actualizar una regla de alerta"""
+    if not db:
+        return jsonify({"error": "Base de datos no disponible"}), 500
+
+    try:
+        data = request.json
+
+        success = db.update_alert_rule(rule_id, **data)
+
+        if success:
+            return jsonify({
+                "success": True,
+                "message": "Regla actualizada correctamente"
+            })
+        else:
+            return jsonify({"error": "No se actualizó ningún campo"}), 400
+
+    except Exception as e:
+        print(f"[API] Error actualizando regla de alerta: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/alert-rules/<int:rule_id>", methods=["DELETE"])
+def delete_alert_rule_endpoint(rule_id):
+    """Eliminar una regla de alerta"""
+    if not db:
+        return jsonify({"error": "Base de datos no disponible"}), 500
+
+    try:
+        success = db.delete_alert_rule(rule_id)
+
+        if success:
+            return jsonify({
+                "success": True,
+                "message": "Regla eliminada correctamente"
+            })
+        else:
+            return jsonify({"error": "Regla no encontrada"}), 404
+
+    except Exception as e:
+        print(f"[API] Error eliminando regla de alerta: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/alert-rules/<int:rule_id>/toggle", methods=["POST"])
+def toggle_alert_rule_endpoint(rule_id):
+    """Activar/desactivar una regla de alerta"""
+    if not db:
+        return jsonify({"error": "Base de datos no disponible"}), 500
+
+    try:
+        data = request.json
+        enabled = data.get('enabled', True)
+
+        success = db.toggle_alert_rule(rule_id, enabled)
+
+        if success:
+            return jsonify({
+                "success": True,
+                "message": f"Regla {'activada' if enabled else 'desactivada'} correctamente"
+            })
+        else:
+            return jsonify({"error": "Regla no encontrada"}), 404
+
+    except Exception as e:
+        print(f"[API] Error alternando regla de alerta: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/alert-rules/default/<int:vehicle_id>", methods=["POST"])
+def install_default_rules_endpoint(vehicle_id):
+    """Instalar reglas predefinidas para un vehículo"""
+    if not alert_monitor:
+        return jsonify({"error": "Alert Monitor no disponible"}), 500
+
+    try:
+        count = alert_monitor.install_default_rules(vehicle_id)
+
+        return jsonify({
+            "success": True,
+            "rules_installed": count,
+            "message": f"{count} reglas predefinidas instaladas correctamente"
+        })
+
+    except Exception as e:
+        print(f"[API] Error instalando reglas predefinidas: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/alerts/stats", methods=["GET"])
+def get_alert_stats_endpoint():
+    """Obtener estadísticas de alertas"""
+    if not alert_monitor:
+        return jsonify({"error": "Alert Monitor no disponible"}), 500
+
+    try:
+        vehicle_id = request.args.get('vehicle_id')
+        if vehicle_id:
+            vehicle_id = int(vehicle_id)
+
+        days = int(request.args.get('days', 7))
+
+        stats = alert_monitor.get_alert_stats(vehicle_id, days)
+
+        return jsonify({
+            "success": True,
+            "stats": stats
+        })
+
+    except Exception as e:
+        print(f"[API] Error obteniendo estadísticas de alertas: {e}")
         return jsonify({"error": str(e)}), 500
 
 # --- ENDPOINTS DE IMPORTACIÓN CSV ---

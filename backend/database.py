@@ -137,8 +137,29 @@ class DatabaseManager:
                     threshold REAL,
                     timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     acknowledged BOOLEAN DEFAULT 0,
+                    acknowledged_at TIMESTAMP,
                     FOREIGN KEY (vehicle_id) REFERENCES vehicles(id),
                     FOREIGN KEY (trip_id) REFERENCES trips(id)
+                )
+            ''')
+
+            # Tabla de reglas de alertas (configuración)
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS alert_rules (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    vehicle_id INTEGER,
+                    name TEXT NOT NULL,
+                    parameter TEXT NOT NULL,
+                    condition TEXT NOT NULL,
+                    threshold REAL NOT NULL,
+                    severity TEXT NOT NULL,
+                    message_template TEXT,
+                    enabled BOOLEAN DEFAULT 1,
+                    notify_email BOOLEAN DEFAULT 0,
+                    notify_sound BOOLEAN DEFAULT 1,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (vehicle_id) REFERENCES vehicles(id)
                 )
             ''')
 
@@ -168,6 +189,9 @@ class DatabaseManager:
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_obd_timestamp ON obd_data(timestamp)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_maintenance_vehicle ON maintenance(vehicle_id)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_alerts_vehicle ON alerts(vehicle_id)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_alerts_acknowledged ON alerts(acknowledged)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_alert_rules_vehicle ON alert_rules(vehicle_id)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_alert_rules_enabled ON alert_rules(enabled)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_imports_vehicle ON imports(vehicle_id)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_imports_hash ON imports(file_hash)')
 
@@ -799,13 +823,15 @@ class DatabaseManager:
             conn.close()
 
     def get_vehicle_alerts(self, vehicle_id: int,
-                          acknowledged: bool = None) -> List[Dict]:
+                          acknowledged: bool = None,
+                          limit: int = 100) -> List[Dict]:
         """
         Obtiene alertas de un vehículo
 
         Args:
             vehicle_id: ID del vehículo
             acknowledged: Filtrar por estado de reconocimiento
+            limit: Número máximo de alertas
 
         Returns:
             Lista de alertas
@@ -819,19 +845,332 @@ class DatabaseManager:
                     SELECT * FROM alerts
                     WHERE vehicle_id = ?
                     ORDER BY timestamp DESC
-                ''', (vehicle_id,))
+                    LIMIT ?
+                ''', (vehicle_id, limit))
             else:
                 cursor.execute('''
                     SELECT * FROM alerts
                     WHERE vehicle_id = ? AND acknowledged = ?
                     ORDER BY timestamp DESC
-                ''', (vehicle_id, 1 if acknowledged else 0))
+                    LIMIT ?
+                ''', (vehicle_id, 1 if acknowledged else 0, limit))
 
             rows = cursor.fetchall()
             return [dict(row) for row in rows]
 
         finally:
             conn.close()
+
+    def get_all_alerts(self, acknowledged: bool = None, limit: int = 100) -> List[Dict]:
+        """
+        Obtiene todas las alertas de la flota
+
+        Args:
+            acknowledged: Filtrar por estado de reconocimiento
+            limit: Número máximo de alertas
+
+        Returns:
+            Lista de alertas con información del vehículo
+        """
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        try:
+            if acknowledged is None:
+                cursor.execute('''
+                    SELECT a.*, v.brand, v.model, v.vin
+                    FROM alerts a
+                    JOIN vehicles v ON a.vehicle_id = v.id
+                    ORDER BY a.timestamp DESC
+                    LIMIT ?
+                ''', (limit,))
+            else:
+                cursor.execute('''
+                    SELECT a.*, v.brand, v.model, v.vin
+                    FROM alerts a
+                    JOIN vehicles v ON a.vehicle_id = v.id
+                    WHERE a.acknowledged = ?
+                    ORDER BY a.timestamp DESC
+                    LIMIT ?
+                ''', (1 if acknowledged else 0, limit))
+
+            rows = cursor.fetchall()
+            return [dict(row) for row in rows]
+
+        finally:
+            conn.close()
+
+    def acknowledge_alert(self, alert_id: int) -> bool:
+        """
+        Marca una alerta como reconocida
+
+        Args:
+            alert_id: ID de la alerta
+
+        Returns:
+            True si se actualizó correctamente
+        """
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        try:
+            cursor.execute('''
+                UPDATE alerts
+                SET acknowledged = 1, acknowledged_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+            ''', (alert_id,))
+
+            conn.commit()
+            return cursor.rowcount > 0
+
+        except Exception as e:
+            conn.rollback()
+            print(f"[DB] ✗ Error reconociendo alerta: {e}")
+            raise
+        finally:
+            conn.close()
+
+    def acknowledge_all_alerts(self, vehicle_id: int = None) -> int:
+        """
+        Marca todas las alertas como reconocidas
+
+        Args:
+            vehicle_id: ID del vehículo (opcional, todas si None)
+
+        Returns:
+            Número de alertas reconocidas
+        """
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        try:
+            if vehicle_id:
+                cursor.execute('''
+                    UPDATE alerts
+                    SET acknowledged = 1, acknowledged_at = CURRENT_TIMESTAMP
+                    WHERE vehicle_id = ? AND acknowledged = 0
+                ''', (vehicle_id,))
+            else:
+                cursor.execute('''
+                    UPDATE alerts
+                    SET acknowledged = 1, acknowledged_at = CURRENT_TIMESTAMP
+                    WHERE acknowledged = 0
+                ''')
+
+            count = cursor.rowcount
+            conn.commit()
+            print(f"[DB] ✓ {count} alertas reconocidas")
+            return count
+
+        except Exception as e:
+            conn.rollback()
+            print(f"[DB] ✗ Error reconociendo alertas: {e}")
+            raise
+        finally:
+            conn.close()
+
+    # =========================================================================
+    # GESTIÓN DE REGLAS DE ALERTAS
+    # =========================================================================
+
+    def create_alert_rule(self, vehicle_id: int, name: str, parameter: str,
+                         condition: str, threshold: float, severity: str,
+                         message_template: str = None, notify_email: bool = False,
+                         notify_sound: bool = True) -> int:
+        """
+        Crea una regla de alerta
+
+        Args:
+            vehicle_id: ID del vehículo (None para regla global)
+            name: Nombre de la regla
+            parameter: Parámetro a monitorear (rpm, speed, coolant_temp, etc.)
+            condition: Condición (>, <, >=, <=, ==, !=)
+            threshold: Valor umbral
+            severity: Severidad (low, medium, high, critical)
+            message_template: Plantilla del mensaje
+            notify_email: Enviar notificación por email
+            notify_sound: Reproducir sonido de alerta
+
+        Returns:
+            ID de la regla creada
+        """
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        try:
+            cursor.execute('''
+                INSERT INTO alert_rules (
+                    vehicle_id, name, parameter, condition, threshold,
+                    severity, message_template, notify_email, notify_sound
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (vehicle_id, name, parameter, condition, threshold, severity,
+                  message_template, 1 if notify_email else 0, 1 if notify_sound else 0))
+
+            rule_id = cursor.lastrowid
+            conn.commit()
+            print(f"[DB] ✓ Regla de alerta creada: {name} (ID: {rule_id})")
+            return rule_id
+
+        except Exception as e:
+            conn.rollback()
+            print(f"[DB] ✗ Error creando regla de alerta: {e}")
+            raise
+        finally:
+            conn.close()
+
+    def get_alert_rule(self, rule_id: int) -> Optional[Dict]:
+        """
+        Obtiene una regla de alerta por ID
+
+        Args:
+            rule_id: ID de la regla
+
+        Returns:
+            Diccionario con la regla o None
+        """
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        try:
+            cursor.execute('SELECT * FROM alert_rules WHERE id = ?', (rule_id,))
+            row = cursor.fetchone()
+
+            if row:
+                return dict(row)
+            return None
+
+        finally:
+            conn.close()
+
+    def get_alert_rules(self, vehicle_id: int = None, enabled_only: bool = True) -> List[Dict]:
+        """
+        Obtiene reglas de alertas
+
+        Args:
+            vehicle_id: ID del vehículo (None para todas)
+            enabled_only: Solo reglas habilitadas
+
+        Returns:
+            Lista de reglas
+        """
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        try:
+            if vehicle_id is not None:
+                if enabled_only:
+                    cursor.execute('''
+                        SELECT * FROM alert_rules
+                        WHERE (vehicle_id = ? OR vehicle_id IS NULL) AND enabled = 1
+                        ORDER BY created_at DESC
+                    ''', (vehicle_id,))
+                else:
+                    cursor.execute('''
+                        SELECT * FROM alert_rules
+                        WHERE vehicle_id = ? OR vehicle_id IS NULL
+                        ORDER BY created_at DESC
+                    ''', (vehicle_id,))
+            else:
+                if enabled_only:
+                    cursor.execute('''
+                        SELECT * FROM alert_rules
+                        WHERE enabled = 1
+                        ORDER BY created_at DESC
+                    ''')
+                else:
+                    cursor.execute('SELECT * FROM alert_rules ORDER BY created_at DESC')
+
+            rows = cursor.fetchall()
+            return [dict(row) for row in rows]
+
+        finally:
+            conn.close()
+
+    def update_alert_rule(self, rule_id: int, **kwargs) -> bool:
+        """
+        Actualiza una regla de alerta
+
+        Args:
+            rule_id: ID de la regla
+            **kwargs: Campos a actualizar
+
+        Returns:
+            True si se actualizó correctamente
+        """
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        try:
+            allowed_fields = ['name', 'parameter', 'condition', 'threshold',
+                            'severity', 'message_template', 'enabled',
+                            'notify_email', 'notify_sound']
+
+            updates = []
+            values = []
+
+            for key, value in kwargs.items():
+                if key in allowed_fields:
+                    updates.append(f"{key} = ?")
+                    values.append(value)
+
+            if not updates:
+                return False
+
+            updates.append("updated_at = CURRENT_TIMESTAMP")
+            values.append(rule_id)
+
+            query = f"UPDATE alert_rules SET {', '.join(updates)} WHERE id = ?"
+            cursor.execute(query, values)
+
+            conn.commit()
+            print(f"[DB] ✓ Regla de alerta {rule_id} actualizada")
+            return True
+
+        except Exception as e:
+            conn.rollback()
+            print(f"[DB] ✗ Error actualizando regla de alerta: {e}")
+            raise
+        finally:
+            conn.close()
+
+    def delete_alert_rule(self, rule_id: int) -> bool:
+        """
+        Elimina una regla de alerta
+
+        Args:
+            rule_id: ID de la regla
+
+        Returns:
+            True si se eliminó correctamente
+        """
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        try:
+            cursor.execute('DELETE FROM alert_rules WHERE id = ?', (rule_id,))
+            conn.commit()
+            print(f"[DB] ✓ Regla de alerta {rule_id} eliminada")
+            return cursor.rowcount > 0
+
+        except Exception as e:
+            conn.rollback()
+            print(f"[DB] ✗ Error eliminando regla de alerta: {e}")
+            raise
+        finally:
+            conn.close()
+
+    def toggle_alert_rule(self, rule_id: int, enabled: bool) -> bool:
+        """
+        Activa/desactiva una regla de alerta
+
+        Args:
+            rule_id: ID de la regla
+            enabled: True para activar, False para desactivar
+
+        Returns:
+            True si se actualizó correctamente
+        """
+        return self.update_alert_rule(rule_id, enabled=1 if enabled else 0)
 
 
 # Inicialización global
