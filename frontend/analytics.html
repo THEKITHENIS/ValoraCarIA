@@ -7,7 +7,11 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="css/fleet.css">
+    <!-- Leaflet.js CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <!-- Leaflet.js JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 </head>
 <body>
     <!-- HEADER CON NAVEGACIÓN -->
@@ -136,6 +140,46 @@
                     <canvas id="distanceChart"></canvas>
                 </div>
 
+            </div>
+        </div>
+
+        <!-- MAPA DE RUTAS GPS -->
+        <div id="mapSection" style="display: none;">
+            <div class="card">
+                <h2><i class="fas fa-map-marked-alt"></i> Mapa de Rutas GPS</h2>
+
+                <div class="map-controls">
+                    <div class="map-control-group">
+                        <label for="tripMapSelect"><i class="fas fa-route"></i> Seleccionar Viaje:</label>
+                        <select id="tripMapSelect">
+                            <option value="">Ver todos los viajes...</option>
+                        </select>
+                    </div>
+                    <button id="centerMapBtn" class="btn btn-secondary">
+                        <i class="fas fa-crosshairs"></i>
+                        Centrar Mapa
+                    </button>
+                </div>
+
+                <div id="tripMapContainer"></div>
+
+                <div id="mapStats" style="margin-top: 1rem; padding: 1rem; background: #f8fafc; border-radius: 8px; display: none;">
+                    <h4 style="margin: 0 0 0.5rem 0; color: #1e293b;">Estadísticas del Viaje</h4>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem;">
+                        <div>
+                            <span style="color: #64748b; font-size: 0.85rem;">Puntos GPS:</span>
+                            <strong id="mapStatPoints" style="display: block; color: #1e293b;">0</strong>
+                        </div>
+                        <div>
+                            <span style="color: #64748b; font-size: 0.85rem;">Distancia:</span>
+                            <strong id="mapStatDistance" style="display: block; color: #1e293b;">0 km</strong>
+                        </div>
+                        <div>
+                            <span style="color: #64748b; font-size: 0.85rem;">Duración:</span>
+                            <strong id="mapStatDuration" style="display: block; color: #1e293b;">0 min</strong>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -298,6 +342,49 @@
             padding: 2rem;
         }
 
+        /* Estilos para el mapa */
+        #tripMapContainer {
+            height: 500px;
+            width: 100%;
+            border-radius: 8px;
+            overflow: hidden;
+            margin-top: 1rem;
+        }
+
+        .map-controls {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .map-control-group {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .map-control-group label {
+            font-size: 0.9rem;
+            color: #475569;
+        }
+
+        .map-control-group select {
+            padding: 0.5rem;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            font-size: 0.9rem;
+        }
+
+        .leaflet-popup-content {
+            margin: 0.5rem;
+            line-height: 1.6;
+        }
+
+        .leaflet-popup-content strong {
+            color: #1e293b;
+        }
+
         @media (max-width: 768px) {
             .charts-grid {
                 grid-template-columns: 1fr;
@@ -305,6 +392,10 @@
 
             .kpi-grid {
                 grid-template-columns: 1fr;
+            }
+
+            #tripMapContainer {
+                height: 400px;
             }
         }
     </style>
@@ -324,8 +415,14 @@
             const chartsSection = document.getElementById('chartsSection');
             const tripsTable = document.getElementById('tripsTable');
             const noDataPlaceholder = document.getElementById('noDataPlaceholder');
+            const mapSection = document.getElementById('mapSection');
+            const tripMapSelect = document.getElementById('tripMapSelect');
+            const centerMapBtn = document.getElementById('centerMapBtn');
 
             let charts = {};
+            let tripMap = null;
+            let tripLayers = [];
+            let allTripsData = [];
 
             // Cargar vehículos
             async function loadVehicles() {
@@ -365,10 +462,15 @@
                         displayCharts(data.charts);
                         displayTripsTable(data.stats.trips || []);
 
+                        // Cargar datos GPS para los viajes
+                        allTripsData = data.stats.trips || [];
+                        await loadTripMapData(vehicleId);
+
                         noDataPlaceholder.style.display = 'none';
                         kpisSection.style.display = 'block';
                         chartsSection.style.display = 'block';
                         tripsTable.style.display = 'block';
+                        mapSection.style.display = 'block';
                     }
                 } catch (error) {
                     console.error('[ANALYTICS] Error:', error);
@@ -455,6 +557,238 @@
                     </tr>
                 `).join('');
             }
+
+            // === FUNCIONES DEL MAPA GPS ===
+
+            /**
+             * Inicializar mapa de Leaflet
+             */
+            function initMap() {
+                if (tripMap) return;
+
+                // Crear mapa centrado en España (ejemplo)
+                tripMap = L.map('tripMapContainer').setView([40.4168, -3.7038], 6);
+
+                // Añadir tiles de OpenStreetMap
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '© OpenStreetMap contributors',
+                    maxZoom: 19
+                }).addTo(tripMap);
+
+                console.log('[MAP] Mapa inicializado');
+            }
+
+            /**
+             * Cargar datos GPS de los viajes
+             */
+            async function loadTripMapData(vehicleId) {
+                try {
+                    // Inicializar mapa si no existe
+                    if (!tripMap) {
+                        initMap();
+                    }
+
+                    // Limpiar capas anteriores
+                    tripLayers.forEach(layer => tripMap.removeLayer(layer));
+                    tripLayers = [];
+
+                    // Poblar selector de viajes
+                    tripMapSelect.innerHTML = '<option value="">Ver todos los viajes...</option>';
+                    allTripsData.forEach(trip => {
+                        const option = document.createElement('option');
+                        option.value = trip.id;
+                        option.textContent = `Viaje ${trip.id} - ${SENTINEL.Formatter.date(trip.start_time, true)} (${SENTINEL.Formatter.distance(trip.distance)})`;
+                        tripMapSelect.appendChild(option);
+                    });
+
+                    // Cargar datos GPS para todos los viajes con coordenadas
+                    const tripsWithGPS = [];
+                    for (const trip of allTripsData) {
+                        const gpsData = await loadTripGPSData(trip.id);
+                        if (gpsData && gpsData.length > 0) {
+                            tripsWithGPS.push({ ...trip, gpsData });
+                        }
+                    }
+
+                    // Dibujar todas las rutas
+                    if (tripsWithGPS.length > 0) {
+                        drawAllTrips(tripsWithGPS);
+                    } else {
+                        SENTINEL.Toast.info('No hay datos GPS disponibles para estos viajes');
+                    }
+
+                } catch (error) {
+                    console.error('[MAP] Error cargando datos GPS:', error);
+                }
+            }
+
+            /**
+             * Cargar datos GPS de un viaje específico
+             */
+            async function loadTripGPSData(tripId) {
+                try {
+                    const response = await fetch(`http://localhost:5000/api/trips/${tripId}/data`);
+                    if (!response.ok) return [];
+
+                    const data = await response.json();
+
+                    // Filtrar solo puntos con coordenadas válidas
+                    const gpsPoints = (data.obd_data || []).filter(point =>
+                        point.latitude && point.longitude &&
+                        point.latitude !== 0 && point.longitude !== 0
+                    );
+
+                    return gpsPoints;
+                } catch (error) {
+                    console.error(`[MAP] Error cargando GPS del viaje ${tripId}:`, error);
+                    return [];
+                }
+            }
+
+            /**
+             * Dibujar todas las rutas en el mapa
+             */
+            function drawAllTrips(tripsWithGPS) {
+                const bounds = [];
+                const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
+
+                tripsWithGPS.forEach((trip, index) => {
+                    const color = colors[index % colors.length];
+                    const coordinates = trip.gpsData.map(point => [point.latitude, point.longitude]);
+
+                    // Dibujar polilínea
+                    const polyline = L.polyline(coordinates, {
+                        color: color,
+                        weight: 3,
+                        opacity: 0.7
+                    }).addTo(tripMap);
+
+                    // Popup con info del viaje
+                    polyline.bindPopup(`
+                        <strong>Viaje #${trip.id}</strong><br>
+                        Fecha: ${SENTINEL.Formatter.date(trip.start_time, true)}<br>
+                        Distancia: ${SENTINEL.Formatter.distance(trip.distance)}<br>
+                        Puntos GPS: ${trip.gpsData.length}
+                    `);
+
+                    // Marcador inicio (verde)
+                    if (coordinates.length > 0) {
+                        L.circleMarker(coordinates[0], {
+                            radius: 6,
+                            fillColor: '#10b981',
+                            color: '#fff',
+                            weight: 2,
+                            opacity: 1,
+                            fillOpacity: 0.8
+                        }).addTo(tripMap).bindPopup(`<strong>Inicio</strong><br>Viaje #${trip.id}`);
+
+                        // Marcador fin (rojo)
+                        L.circleMarker(coordinates[coordinates.length - 1], {
+                            radius: 6,
+                            fillColor: '#ef4444',
+                            color: '#fff',
+                            weight: 2,
+                            opacity: 1,
+                            fillOpacity: 0.8
+                        }).addTo(tripMap).bindPopup(`<strong>Fin</strong><br>Viaje #${trip.id}`);
+                    }
+
+                    tripLayers.push(polyline);
+                    bounds.push(...coordinates);
+                });
+
+                // Ajustar vista para mostrar todas las rutas
+                if (bounds.length > 0) {
+                    tripMap.fitBounds(bounds, { padding: [50, 50] });
+                }
+            }
+
+            /**
+             * Mostrar solo un viaje específico
+             */
+            async function showSingleTrip(tripId) {
+                // Limpiar capas anteriores
+                tripLayers.forEach(layer => tripMap.removeLayer(layer));
+                tripLayers = [];
+
+                const gpsData = await loadTripGPSData(tripId);
+
+                if (gpsData.length === 0) {
+                    SENTINEL.Toast.warning('Este viaje no tiene datos GPS');
+                    return;
+                }
+
+                const coordinates = gpsData.map(point => [point.latitude, point.longitude]);
+
+                // Dibujar ruta
+                const polyline = L.polyline(coordinates, {
+                    color: '#3b82f6',
+                    weight: 4,
+                    opacity: 0.8
+                }).addTo(tripMap);
+
+                // Marcadores
+                L.circleMarker(coordinates[0], {
+                    radius: 8,
+                    fillColor: '#10b981',
+                    color: '#fff',
+                    weight: 2,
+                    opacity: 1,
+                    fillOpacity: 0.9
+                }).addTo(tripMap).bindPopup('<strong>Inicio del viaje</strong>');
+
+                L.circleMarker(coordinates[coordinates.length - 1], {
+                    radius: 8,
+                    fillColor: '#ef4444',
+                    color: '#fff',
+                    weight: 2,
+                    opacity: 1,
+                    fillOpacity: 0.9
+                }).addTo(tripMap).bindPopup('<strong>Fin del viaje</strong>');
+
+                tripLayers.push(polyline);
+
+                // Ajustar vista
+                tripMap.fitBounds(coordinates, { padding: [50, 50] });
+
+                // Mostrar estadísticas
+                const trip = allTripsData.find(t => t.id == tripId);
+                if (trip) {
+                    document.getElementById('mapStatPoints').textContent = gpsData.length;
+                    document.getElementById('mapStatDistance').textContent = SENTINEL.Formatter.distance(trip.distance);
+                    document.getElementById('mapStatDuration').textContent = SENTINEL.Formatter.duration(trip.duration);
+                    document.getElementById('mapStats').style.display = 'block';
+                }
+            }
+
+            // Event listeners del mapa
+            tripMapSelect.addEventListener('change', (e) => {
+                const tripId = e.target.value;
+                if (tripId) {
+                    showSingleTrip(tripId);
+                } else {
+                    // Recargar todos los viajes
+                    document.getElementById('mapStats').style.display = 'none';
+                    const vehicleId = vehicleSelect.value;
+                    if (vehicleId) loadTripMapData(vehicleId);
+                }
+            });
+
+            centerMapBtn.addEventListener('click', () => {
+                if (tripLayers.length > 0) {
+                    const bounds = [];
+                    tripLayers.forEach(layer => {
+                        if (layer.getLatLngs) {
+                            bounds.push(...layer.getLatLngs());
+                        }
+                    });
+                    if (bounds.length > 0) {
+                        tripMap.fitBounds(bounds, { padding: [50, 50] });
+                    }
+                }
+            });
+
+            // === FIN FUNCIONES DEL MAPA ===
 
             // Event listeners
             loadDataBtn.addEventListener('click', loadAnalytics);
