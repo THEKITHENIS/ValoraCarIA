@@ -68,6 +68,14 @@ document.addEventListener('DOMContentLoaded', () => {
     let lastGPSPosition = null;
     let gpsDataPoints = [];
     let totalGPSDistance = 0;
+
+    // Control de viaje
+    let tripActive = false;
+    let lowRpmCount = 0;
+    const LOW_RPM_THRESHOLD = 5; // Número de lecturas consecutivas con RPM < 400 para finalizar viaje
+    let currentTripId = null;
+    let tripDataBuffer = []; // Buffer para acumular datos antes de enviar a BD
+    const TRIP_DATA_BATCH_SIZE = 10; // Enviar cada 10 puntos de datos
     
     // === FUNCIONES DE ALMACENAMIENTO ===
     
@@ -398,8 +406,117 @@ document.addEventListener('DOMContentLoaded', () => {
         }, 4000);
     }
     
+    // === FUNCIONES DE GESTIÓN DE VIAJES CON BD ===
+
+    /**
+     * Iniciar viaje en la base de datos
+     */
+    async function startTripInDB() {
+        const vehicleId = SENTINEL.ActiveVehicle.get();
+
+        if (!vehicleId) {
+            console.warn('[TRIP] No hay vehículo activo. Crear vehículo en fleet.html primero.');
+            return null;
+        }
+
+        try {
+            const response = await fetch(`${API_URL}/api/trips/start`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ vehicle_id: vehicleId })
+            });
+
+            if (!response.ok) {
+                throw new Error('Error iniciando viaje en BD');
+            }
+
+            const result = await response.json();
+            currentTripId = result.trip_id;
+            tripDataBuffer = [];
+
+            console.log(`[TRIP-DB] ✓ Viaje iniciado en BD (trip_id: ${currentTripId})`);
+            return currentTripId;
+
+        } catch (error) {
+            console.error('[TRIP-DB] Error iniciando viaje:', error);
+            return null;
+        }
+    }
+
+    /**
+     * Guardar datos OBD + GPS en la BD
+     */
+    async function saveTripDataToDB(dataPoint) {
+        if (!currentTripId) return;
+
+        tripDataBuffer.push(dataPoint);
+
+        // Enviar cuando el buffer alcanza el tamaño de batch
+        if (tripDataBuffer.length >= TRIP_DATA_BATCH_SIZE) {
+            await flushTripDataBuffer();
+        }
+    }
+
+    /**
+     * Enviar buffer de datos a la BD
+     */
+    async function flushTripDataBuffer() {
+        if (!currentTripId || tripDataBuffer.length === 0) return;
+
+        try {
+            const response = await fetch(`${API_URL}/api/trips/${currentTripId}/data`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ data_points: tripDataBuffer })
+            });
+
+            if (response.ok) {
+                const result = await response.json();
+                console.log(`[TRIP-DB] ✓ ${result.points_saved} puntos guardados en BD`);
+                tripDataBuffer = [];
+            }
+
+        } catch (error) {
+            console.error('[TRIP-DB] Error guardando datos:', error);
+        }
+    }
+
+    /**
+     * Finalizar viaje en la BD
+     */
+    async function endTripInDB() {
+        if (!currentTripId) return;
+
+        // Enviar datos pendientes
+        await flushTripDataBuffer();
+
+        try {
+            const stats = {
+                distance_km: totalGPSDistance || trip_data?.distance_km || 0,
+                avg_speed: 0, // Calcular si es necesario
+                max_speed: 0  // Calcular si es necesario
+            };
+
+            const response = await fetch(`${API_URL}/api/trips/${currentTripId}/stop`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ stats })
+            });
+
+            if (response.ok) {
+                console.log(`[TRIP-DB] ✓ Viaje ${currentTripId} finalizado en BD`);
+            }
+
+        } catch (error) {
+            console.error('[TRIP-DB] Error finalizando viaje:', error);
+        } finally {
+            currentTripId = null;
+            tripDataBuffer = [];
+        }
+    }
+
     // === FUNCIONES DE RED ===
-    
+
     async function fetchLiveData() {
         try {
             const response = await fetch(`${API_URL}/get_live_data`, {
@@ -437,8 +554,71 @@ document.addEventListener('DOMContentLoaded', () => {
                 isOBDConnected = true;
                 consecutiveFailures = 0;
                 updateLiveData(data);
+
+                // GESTIÓN AUTOMÁTICA DE GPS Y BD
+                const rpm = data.RPM;
+
+                if (rpm && rpm > 400) {
+                    // Viaje activo - iniciar GPS y BD si no está activo
+                    lowRpmCount = 0;
+
+                    if (!tripActive) {
+                        tripActive = true;
+                        console.log('[AUTO-GPS] ✓ Viaje detectado (RPM > 400)');
+
+                        // Iniciar viaje en BD
+                        await startTripInDB();
+
+                        // Iniciar GPS
+                        if (!gpsEnabled) {
+                            const gpsStarted = startGPSTracking();
+                            if (gpsStarted) {
+                                showConnectionNotification('GPS activado - Viaje iniciado en BD', 'success');
+                            }
+                        }
+                    }
+
+                    // Guardar datos del viaje actual
+                    if (currentTripId) {
+                        const dataPoint = {
+                            timestamp: new Date().toISOString(),
+                            rpm: data.RPM,
+                            speed: data.SPEED,
+                            coolant_temp: data.COOLANT_TEMP,
+                            intake_temp: data.INTAKE_TEMP,
+                            maf: data.MAF,
+                            engine_load: data.ENGINE_LOAD,
+                            throttle_pos: data.THROTTLE_POS,
+                            fuel_pressure: data.FUEL_PRESSURE || null,
+                            latitude: lastGPSPosition?.latitude || null,
+                            longitude: lastGPSPosition?.longitude || null
+                        };
+
+                        await saveTripDataToDB(dataPoint);
+                    }
+
+                } else if (tripActive && (!rpm || rpm < 400)) {
+                    // Contador para evitar paradas momentáneas
+                    lowRpmCount++;
+
+                    if (lowRpmCount >= LOW_RPM_THRESHOLD) {
+                        // Viaje finalizado
+                        tripActive = false;
+                        lowRpmCount = 0;
+                        console.log('[AUTO-GPS] ✓ Viaje finalizado (RPM < 400)');
+
+                        // Finalizar viaje en BD
+                        await endTripInDB();
+
+                        // Detener GPS
+                        if (gpsEnabled) {
+                            stopGPSTracking();
+                            showConnectionNotification('GPS desactivado - Viaje finalizado', 'info');
+                        }
+                    }
+                }
             }
-            
+
             updateAnalyzeButton();
             
         } catch (error) {
