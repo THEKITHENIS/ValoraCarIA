@@ -43,9 +43,73 @@
 
     <!-- CONTENEDOR PRINCIPAL -->
     <div class="container">
-        
+
+        <!-- SELECTOR DE MODO DE TRABAJO -->
+        <div class="card" id="vehicleSelectorCard">
+            <h2>
+                <i class="fas fa-route"></i>
+                Selecciona Modo de Trabajo
+            </h2>
+
+            <div class="mode-selector">
+                <button class="mode-btn active" id="modeFleet" data-mode="fleet">
+                    <i class="fas fa-cars"></i>
+                    <span class="mode-title">Vehículo de Flota</span>
+                    <span class="mode-desc">Selecciona un vehículo existente</span>
+                </button>
+
+                <button class="mode-btn" id="modeNew" data-mode="new">
+                    <i class="fas fa-plus-circle"></i>
+                    <span class="mode-title">Nuevo Vehículo</span>
+                    <span class="mode-desc">Crear y configurar nuevo</span>
+                </button>
+
+                <button class="mode-btn" id="modeImport" data-mode="import">
+                    <i class="fas fa-file-import"></i>
+                    <span class="mode-title">Importar Datos CSV</span>
+                    <span class="mode-desc">Subir viajes de otro dispositivo</span>
+                </button>
+            </div>
+
+            <!-- Selector de vehículo de flota (visible solo en modo fleet) -->
+            <div id="fleetVehicleSelector" class="vehicle-selector-container">
+                <label for="fleetVehicleSelect">
+                    <i class="fas fa-car"></i> Selecciona un vehículo de tu flota
+                </label>
+                <select id="fleetVehicleSelect" class="form-control">
+                    <option value="">Cargando vehículos...</option>
+                </select>
+                <button id="loadFleetVehicle" class="btn btn-primary" style="margin-top: 1rem;">
+                    <i class="fas fa-check"></i> Cargar Vehículo
+                </button>
+            </div>
+
+            <!-- Mensaje para modo nuevo (visible solo en modo new) -->
+            <div id="newVehicleMessage" class="info-message" style="display: none;">
+                <i class="fas fa-info-circle"></i>
+                <p>Completa los datos del vehículo en la sección "Configuración del Vehículo" a continuación.</p>
+            </div>
+
+            <!-- Uploader CSV (visible solo en modo import) -->
+            <div id="csvImportSection" class="csv-import-container" style="display: none;">
+                <p class="info-text">
+                    <i class="fas fa-info-circle"></i>
+                    Sube archivos CSV de Torque, OBD11, Carista, VCDS u otros dispositivos de diagnóstico.
+                </p>
+                <div class="upload-zone" id="csvDropZone">
+                    <i class="fas fa-cloud-upload-alt"></i>
+                    <p>Arrastra archivos CSV aquí</p>
+                    <p class="small-text">o haz clic para seleccionar</p>
+                    <input type="file" id="csvImportInput" accept=".csv" multiple style="display: none;">
+                </div>
+                <button id="proceedToImport" class="btn btn-primary" style="margin-top: 1rem; display: none;">
+                    <i class="fas fa-arrow-right"></i> Continuar a Importación
+                </button>
+            </div>
+        </div>
+
         <!-- SECCIÓN 1: CONFIGURACIÓN DEL VEHÍCULO -->
-        <div class="card">
+        <div class="card" id="vehicleConfigCard">
             <h2>
                 <i class="fas fa-cog"></i>
                 Configuración del Vehículo
