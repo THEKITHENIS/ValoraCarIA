@@ -12,6 +12,8 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <!-- Leaflet.js JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- SheetJS para exportación a Excel -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
 </head>
 <body>
     <!-- HEADER CON NAVEGACIÓN -->
@@ -790,8 +792,129 @@
 
             // === FIN FUNCIONES DEL MAPA ===
 
+            // === EXPORTACIÓN A EXCEL ===
+
+            /**
+             * Exportar datos a Excel
+             */
+            async function exportToExcel() {
+                const vehicleId = vehicleSelect.value;
+                if (!vehicleId) {
+                    SENTINEL.Toast.warning('Selecciona un vehículo primero');
+                    return;
+                }
+
+                try {
+                    SENTINEL.Toast.info('Generando archivo Excel...');
+
+                    // Obtener datos completos
+                    const params = new URLSearchParams();
+                    if (startDate.value) params.append('start_date', startDate.value);
+                    if (endDate.value) params.append('end_date', endDate.value);
+
+                    const data = await SENTINEL.API.get(`/api/analytics/${vehicleId}?${params}`);
+                    const vehicleInfo = await SENTINEL.API.get(`/api/vehicles/${vehicleId}`);
+
+                    if (!data.success) throw new Error('Error obteniendo datos');
+
+                    // Crear libro de Excel
+                    const wb = XLSX.utils.book_new();
+
+                    // Hoja 1: Resumen
+                    const summaryData = [
+                        ['SENTINEL PRO - REPORTE DE ANALYTICS'],
+                        [],
+                        ['Vehículo:', `${vehicleInfo.vehicle.brand} ${vehicleInfo.vehicle.model} (${vehicleInfo.vehicle.year})`],
+                        ['VIN:', vehicleInfo.vehicle.vin || 'N/A'],
+                        ['Periodo:', `${startDate.value || 'Inicio'} - ${endDate.value || 'Hoy'}`],
+                        ['Fecha Reporte:', new Date().toLocaleDateString('es-ES')],
+                        [],
+                        ['ESTADÍSTICAS GENERALES'],
+                        ['Total Viajes:', data.stats.total_trips || 0],
+                        ['Distancia Total (km):', data.stats.total_distance || 0],
+                        ['Velocidad Media (km/h):', data.stats.avg_speed || 0],
+                        ['Salud Promedio:', data.stats.avg_health_score || 100],
+                    ];
+
+                    const ws_summary = XLSX.utils.aoa_to_sheet(summaryData);
+                    XLSX.utils.book_append_sheet(wb, ws_summary, 'Resumen');
+
+                    // Hoja 2: Viajes
+                    const trips = data.stats.trips || [];
+                    const tripsData = [
+                        ['HISTORIAL DE VIAJES'],
+                        [],
+                        ['#', 'Fecha Inicio', 'Fecha Fin', 'Distancia (km)', 'Duración (min)', 'Vel. Media (km/h)', 'Vel. Máx (km/h)', 'Salud']
+                    ];
+
+                    trips.forEach((trip, index) => {
+                        tripsData.push([
+                            index + 1,
+                            trip.start_time ? new Date(trip.start_time).toLocaleString('es-ES') : '-',
+                            trip.end_time ? new Date(trip.end_time).toLocaleString('es-ES') : '-',
+                            trip.distance || 0,
+                            trip.duration || 0,
+                            trip.avg_speed || 0,
+                            trip.max_speed || 0,
+                            trip.health_score || 100
+                        ]);
+                    });
+
+                    const ws_trips = XLSX.utils.aoa_to_sheet(tripsData);
+
+                    // Aplicar ancho de columnas
+                    ws_trips['!cols'] = [
+                        { wch: 5 },   // #
+                        { wch: 20 },  // Fecha Inicio
+                        { wch: 20 },  // Fecha Fin
+                        { wch: 15 },  // Distancia
+                        { wch: 15 },  // Duración
+                        { wch: 18 },  // Vel. Media
+                        { wch: 18 },  // Vel. Máx
+                        { wch: 10 }   // Salud
+                    ];
+
+                    XLSX.utils.book_append_sheet(wb, ws_trips, 'Viajes');
+
+                    // Hoja 3: Gráficos (datos numéricos)
+                    const chartsData = [
+                        ['DATOS DE GRÁFICOS'],
+                        [],
+                        ['Fecha', 'Salud', 'Distancia (km)']
+                    ];
+
+                    const labels = data.charts?.health_timeline?.labels || [];
+                    const healthData = data.charts?.health_timeline?.data || [];
+                    const distanceData = data.charts?.distance_by_trip?.data || [];
+
+                    labels.forEach((label, index) => {
+                        chartsData.push([
+                            label,
+                            healthData[index] || 0,
+                            distanceData[index] || 0
+                        ]);
+                    });
+
+                    const ws_charts = XLSX.utils.aoa_to_sheet(chartsData);
+                    XLSX.utils.book_append_sheet(wb, ws_charts, 'Datos Gráficos');
+
+                    // Generar archivo
+                    const fileName = `SENTINEL_Analytics_${vehicleInfo.vehicle.brand}_${vehicleInfo.vehicle.model}_${new Date().toISOString().split('T')[0]}.xlsx`;
+                    XLSX.writeFile(wb, fileName);
+
+                    SENTINEL.Toast.success('Excel exportado correctamente');
+
+                } catch (error) {
+                    console.error('[EXPORT] Error:', error);
+                    SENTINEL.Toast.error('Error al exportar a Excel');
+                }
+            }
+
+            // === FIN EXPORTACIÓN A EXCEL ===
+
             // Event listeners
             loadDataBtn.addEventListener('click', loadAnalytics);
+            document.getElementById('exportExcelBtn').addEventListener('click', exportToExcel);
 
             // Inicializar
             await loadVehicles();

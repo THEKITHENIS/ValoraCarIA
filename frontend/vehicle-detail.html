@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SENTINEL PRO - Detalles del Vehículo</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/fleet.css">
+    <!-- Leaflet.js -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+    <!-- HEADER CON NAVEGACIÓN -->
+    <header class="fleet-header">
+        <div class="header-content">
+            <div class="header-left">
+                <h1>
+                    <i class="fas fa-shield-halved"></i>
+                    SENTINEL PRO
+                </h1>
+                <p id="vehicleName">Detalles del Vehículo</p>
+            </div>
+            <nav class="main-nav">
+                <a href="index.html" class="nav-link">
+                    <i class="fas fa-tachometer-alt"></i>
+                    <span>Dashboard</span>
+                </a>
+                <a href="fleet.html" class="nav-link">
+                    <i class="fas fa-cars"></i>
+                    <span>Flotas</span>
+                </a>
+                <a href="analytics.html" class="nav-link">
+                    <i class="fas fa-chart-line"></i>
+                    <span>Análisis</span>
+                </a>
+            </nav>
+        </div>
+    </header>
+
+    <!-- CONTENEDOR PRINCIPAL -->
+    <div class="container fleet-container">
+
+        <!-- BOTÓN VOLVER -->
+        <div style="margin-bottom: 1.5rem;">
+            <a href="fleet.html" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i>
+                Volver a Flotas
+            </a>
+        </div>
+
+        <!-- TARJETA DE INFORMACIÓN DEL VEHÍCULO -->
+        <div class="card" id="vehicleInfoCard">
+            <div style="display: flex; justify-content: space-between; align-items: start; flex-wrap: wrap; gap: 1rem;">
+                <div>
+                    <h2 id="vehicleTitle">
+                        <i class="fas fa-car"></i>
+                        <span id="vehicleBrandModel">---</span>
+                    </h2>
+                    <div class="vehicle-meta" style="margin-top: 1rem; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+                        <div>
+                            <span style="color: #64748b; font-size: 0.85rem;">VIN:</span>
+                            <strong id="vehicleVin" style="display: block; color: #1e293b;">---</strong>
+                        </div>
+                        <div>
+                            <span style="color: #64748b; font-size: 0.85rem;">Año:</span>
+                            <strong id="vehicleYear" style="display: block; color: #1e293b;">---</strong>
+                        </div>
+                        <div>
+                            <span style="color: #64748b; font-size: 0.85rem;">Combustible:</span>
+                            <strong id="vehicleFuel" style="display: block; color: #1e293b;">---</strong>
+                        </div>
+                        <div>
+                            <span style="color: #64748b; font-size: 0.85rem;">Transmisión:</span>
+                            <strong id="vehicleTransmission" style="display: block; color: #1e293b;">---</strong>
+                        </div>
+                        <div>
+                            <span style="color: #64748b; font-size: 0.85rem;">Kilometraje:</span>
+                            <strong id="vehicleMileage" style="display: block; color: #1e293b;">--- km</strong>
+                        </div>
+                        <div>
+                            <span style="color: #64748b; font-size: 0.85rem;">Estado:</span>
+                            <strong id="vehicleStatus" style="display: block; color: #10b981;">Activo</strong>
+                        </div>
+                    </div>
+                </div>
+                <div style="display: flex; gap: 0.5rem;">
+                    <button id="editVehicleBtn" class="btn btn-secondary">
+                        <i class="fas fa-edit"></i>
+                        Editar
+                    </button>
+                    <button id="startTripBtn" class="btn btn-primary">
+                        <i class="fas fa-play"></i>
+                        Iniciar Viaje
+                    </button>
+                </div>
+            </div>
+
+            <div id="vehicleNotes" style="margin-top: 1.5rem; padding: 1rem; background: #f8fafc; border-radius: 8px; display: none;">
+                <strong style="color: #1e293b;">Notas:</strong>
+                <p id="vehicleNotesText" style="margin: 0.5rem 0 0 0; color: #475569;"></p>
+            </div>
+        </div>
+
+        <!-- ESTADÍSTICAS GENERALES -->
+        <div class="kpi-grid" style="margin-top: 2rem;">
+            <div class="kpi-card">
+                <i class="fas fa-route"></i>
+                <div>
+                    <span class="kpi-value" id="stat_trips">0</span>
+                    <span class="kpi-label">Viajes Totales</span>
+                </div>
+            </div>
+            <div class="kpi-card">
+                <i class="fas fa-road"></i>
+                <div>
+                    <span class="kpi-value" id="stat_distance">0</span>
+                    <span class="kpi-label">km Recorridos</span>
+                </div>
+            </div>
+            <div class="kpi-card">
+                <i class="fas fa-tachometer-alt"></i>
+                <div>
+                    <span class="kpi-value" id="stat_avg_speed">0</span>
+                    <span class="kpi-label">Vel. Media</span>
+                </div>
+            </div>
+            <div class="kpi-card">
+                <i class="fas fa-heartbeat"></i>
+                <div>
+                    <span class="kpi-value" id="stat_health">100</span>
+                    <span class="kpi-label">Salud Promedio</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- GRÁFICOS -->
+        <div class="charts-grid" style="margin-top: 2rem;">
+            <div class="card chart-card">
+                <h3><i class="fas fa-chart-line"></i> Distancia por Viaje</h3>
+                <canvas id="distanceChart"></canvas>
+            </div>
+            <div class="card chart-card">
+                <h3><i class="fas fa-heartbeat"></i> Evolución de Salud</h3>
+                <canvas id="healthChart"></canvas>
+            </div>
+        </div>
+
+        <!-- MAPA DEL ÚLTIMO VIAJE -->
+        <div class="card" id="lastTripMap" style="margin-top: 2rem; display: none;">
+            <h2><i class="fas fa-map-marked-alt"></i> Último Viaje</h2>
+            <div id="lastTripMapContainer" style="height: 400px; width: 100%; border-radius: 8px; overflow: hidden; margin-top: 1rem;"></div>
+            <div id="lastTripStats" style="margin-top: 1rem; padding: 1rem; background: #f8fafc; border-radius: 8px;">
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem;">
+                    <div>
+                        <span style="color: #64748b; font-size: 0.85rem;">Fecha:</span>
+                        <strong id="lastTripDate" style="display: block; color: #1e293b;">---</strong>
+                    </div>
+                    <div>
+                        <span style="color: #64748b; font-size: 0.85rem;">Distancia:</span>
+                        <strong id="lastTripDistance" style="display: block; color: #1e293b;">0 km</strong>
+                    </div>
+                    <div>
+                        <span style="color: #64748b; font-size: 0.85rem;">Duración:</span>
+                        <strong id="lastTripDuration" style="display: block; color: #1e293b;">0 min</strong>
+                    </div>
+                    <div>
+                        <span style="color: #64748b; font-size: 0.85rem;">Puntos GPS:</span>
+                        <strong id="lastTripPoints" style="display: block; color: #1e293b;">0</strong>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- HISTORIAL DE VIAJES -->
+        <div class="card" style="margin-top: 2rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                <h2><i class="fas fa-list"></i> Historial de Viajes</h2>
+                <select id="tripsLimitSelect" style="padding: 0.5rem; border: 1px solid #cbd5e1; border-radius: 6px;">
+                    <option value="10">Últimos 10</option>
+                    <option value="25" selected>Últimos 25</option>
+                    <option value="50">Últimos 50</option>
+                    <option value="100">Últimos 100</option>
+                </select>
+            </div>
+            <div class="table-responsive">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Fecha Inicio</th>
+                            <th>Distancia</th>
+                            <th>Duración</th>
+                            <th>Vel. Media</th>
+                            <th>Salud</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tripsTableBody">
+                        <tr><td colspan="7" class="no-data">Cargando viajes...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- HISTORIAL DE MANTENIMIENTO -->
+        <div class="card" style="margin-top: 2rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                <h2><i class="fas fa-wrench"></i> Historial de Mantenimiento</h2>
+                <button id="addMaintenanceBtn" class="btn btn-primary">
+                    <i class="fas fa-plus"></i>
+                    Agregar
+                </button>
+            </div>
+            <div id="maintenanceList">
+                <p class="no-data">No hay registros de mantenimiento</p>
+            </div>
+        </div>
+
+    </div>
+
+    <style>
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .kpi-card {
+            background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+            padding: 1.5rem;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        }
+
+        .kpi-card i {
+            font-size: 2.5rem;
+            color: #3b82f6;
+        }
+
+        .kpi-value {
+            display: block;
+            font-size: 2rem;
+            font-weight: 700;
+            color: #1e293b;
+            line-height: 1;
+        }
+
+        .kpi-label {
+            display: block;
+            font-size: 0.85rem;
+            color: #64748b;
+            margin-top: 0.25rem;
+        }
+
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
+            gap: 2rem;
+        }
+
+        .chart-card {
+            padding: 1.5rem;
+        }
+
+        .chart-card h3 {
+            margin: 0 0 1.5rem 0;
+            color: #1e293b;
+            font-size: 1.1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+
+        .badge.excellent {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .badge.good {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+
+        .badge.warning {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .badge.critical {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .btn-small {
+            padding: 0.5rem 1rem;
+            font-size: 0.9rem;
+        }
+
+        @media (max-width: 768px) {
+            .charts-grid {
+                grid-template-columns: 1fr;
+            }
+            .kpi-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+
+    <script src="js/common.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', async () => {
+            console.log('[VEHICLE-DETAIL] Iniciado');
+
+            // Obtener vehicle_id de URL
+            const urlParams = new URLSearchParams(window.location.search);
+            const vehicleId = urlParams.get('id') || SENTINEL.ActiveVehicle.get();
+
+            if (!vehicleId) {
+                SENTINEL.Toast.error('No se especificó un vehículo');
+                setTimeout(() => window.location.href = 'fleet.html', 2000);
+                return;
+            }
+
+            let vehicleData = null;
+            let lastTripMap = null;
+
+            // Cargar datos del vehículo
+            async function loadVehicleData() {
+                try {
+                    const data = await SENTINEL.API.get(`/api/vehicles/${vehicleId}`);
+                    if (data.success) {
+                        vehicleData = data.vehicle;
+                        displayVehicleInfo(vehicleData);
+                        loadStatistics();
+                        loadTrips();
+                        loadMaintenance();
+                    }
+                } catch (error) {
+                    console.error('[VEHICLE-DETAIL] Error:', error);
+                    SENTINEL.Toast.error('Error cargando datos del vehículo');
+                }
+            }
+
+            // Mostrar información del vehículo
+            function displayVehicleInfo(vehicle) {
+                document.getElementById('vehicleName').textContent = `${vehicle.brand} ${vehicle.model}`;
+                document.getElementById('vehicleBrandModel').textContent = `${vehicle.brand} ${vehicle.model}`;
+                document.getElementById('vehicleVin').textContent = vehicle.vin || 'N/A';
+                document.getElementById('vehicleYear').textContent = vehicle.year || '---';
+                document.getElementById('vehicleFuel').textContent = vehicle.fuel_type || '---';
+                document.getElementById('vehicleTransmission').textContent = vehicle.transmission || '---';
+                document.getElementById('vehicleMileage').textContent = SENTINEL.Formatter.number(vehicle.mileage || 0, 0) + ' km';
+                document.getElementById('vehicleStatus').textContent = vehicle.active ? 'Activo' : 'Inactivo';
+
+                if (vehicle.notes) {
+                    document.getElementById('vehicleNotes').style.display = 'block';
+                    document.getElementById('vehicleNotesText').textContent = vehicle.notes;
+                }
+
+                document.title = `SENTINEL - ${vehicle.brand} ${vehicle.model}`;
+            }
+
+            // Cargar estadísticas
+            async function loadStatistics() {
+                try {
+                    const data = await SENTINEL.API.get(`/api/vehicles/${vehicleId}/stats`);
+                    if (data.success) {
+                        const stats = data.stats;
+                        document.getElementById('stat_trips').textContent = stats.total_trips || 0;
+                        document.getElementById('stat_distance').textContent = SENTINEL.Formatter.number(stats.total_distance || 0, 0);
+                        document.getElementById('stat_avg_speed').textContent = SENTINEL.Formatter.number(stats.avg_speed || 0, 0);
+                        document.getElementById('stat_health').textContent = stats.avg_health_score || 100;
+
+                        // Generar gráficos
+                        generateCharts(data.charts || {});
+                    }
+                } catch (error) {
+                    console.error('[STATS] Error:', error);
+                }
+            }
+
+            // Generar gráficos
+            function generateCharts(chartData) {
+                // Gráfico de distancia
+                const distanceCtx = document.getElementById('distanceChart').getContext('2d');
+                new Chart(distanceCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: chartData.labels || [],
+                        datasets: [{
+                            label: 'Distancia (km)',
+                            data: chartData.distances || [],
+                            backgroundColor: '#3b82f6',
+                            borderRadius: 6
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: true,
+                        scales: {
+                            y: { beginAtZero: true }
+                        }
+                    }
+                });
+
+                // Gráfico de salud
+                const healthCtx = document.getElementById('healthChart').getContext('2d');
+                new Chart(healthCtx, {
+                    type: 'line',
+                    data: {
+                        labels: chartData.labels || [],
+                        datasets: [{
+                            label: 'Score de Salud',
+                            data: chartData.health || [],
+                            borderColor: '#10b981',
+                            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                            tension: 0.4,
+                            fill: true
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: true,
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                max: 100
+                            }
+                        }
+                    }
+                });
+            }
+
+            // Cargar viajes
+            async function loadTrips() {
+                try {
+                    const limit = document.getElementById('tripsLimitSelect').value;
+                    const data = await SENTINEL.API.get(`/api/vehicles/${vehicleId}/trips?limit=${limit}`);
+
+                    if (data.success) {
+                        const trips = data.trips || [];
+                        displayTrips(trips);
+
+                        // Cargar último viaje en el mapa
+                        if (trips.length > 0) {
+                            loadLastTripMap(trips[0]);
+                        }
+                    }
+                } catch (error) {
+                    console.error('[TRIPS] Error:', error);
+                }
+            }
+
+            // Mostrar viajes
+            function displayTrips(trips) {
+                const tbody = document.getElementById('tripsTableBody');
+
+                if (trips.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="7" class="no-data">No hay viajes registrados</td></tr>';
+                    return;
+                }
+
+                tbody.innerHTML = trips.map((trip, index) => `
+                    <tr>
+                        <td>${index + 1}</td>
+                        <td>${SENTINEL.Formatter.date(trip.start_time, true)}</td>
+                        <td>${SENTINEL.Formatter.distance(trip.distance)}</td>
+                        <td>${SENTINEL.Formatter.duration(trip.duration)}</td>
+                        <td>${SENTINEL.Formatter.speed(trip.avg_speed)}</td>
+                        <td><span class="badge ${SENTINEL.HealthUtils.getHealthClass(trip.health_score || 100)}">${trip.health_score || 100}</span></td>
+                        <td><button class="btn-small btn-view" onclick="viewTrip(${trip.id})"><i class="fas fa-eye"></i></button></td>
+                    </tr>
+                `).join('');
+            }
+
+            // Cargar mapa del último viaje
+            async function loadLastTripMap(trip) {
+                try {
+                    const response = await fetch(`http://localhost:5000/api/trips/${trip.id}/data`);
+                    if (!response.ok) return;
+
+                    const data = await response.json();
+                    const gpsPoints = (data.obd_data || []).filter(point =>
+                        point.latitude && point.longitude &&
+                        point.latitude !== 0 && point.longitude !== 0
+                    );
+
+                    if (gpsPoints.length === 0) return;
+
+                    // Mostrar sección del mapa
+                    document.getElementById('lastTripMap').style.display = 'block';
+
+                    // Inicializar mapa
+                    if (!lastTripMap) {
+                        lastTripMap = L.map('lastTripMapContainer').setView([gpsPoints[0].latitude, gpsPoints[0].longitude], 13);
+                        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                            attribution: '© OpenStreetMap contributors',
+                            maxZoom: 19
+                        }).addTo(lastTripMap);
+                    }
+
+                    // Dibujar ruta
+                    const coordinates = gpsPoints.map(p => [p.latitude, p.longitude]);
+                    const polyline = L.polyline(coordinates, {
+                        color: '#3b82f6',
+                        weight: 4,
+                        opacity: 0.8
+                    }).addTo(lastTripMap);
+
+                    // Marcadores
+                    L.circleMarker(coordinates[0], {
+                        radius: 8,
+                        fillColor: '#10b981',
+                        color: '#fff',
+                        weight: 2,
+                        fillOpacity: 0.9
+                    }).addTo(lastTripMap).bindPopup('<strong>Inicio</strong>');
+
+                    L.circleMarker(coordinates[coordinates.length - 1], {
+                        radius: 8,
+                        fillColor: '#ef4444',
+                        color: '#fff',
+                        weight: 2,
+                        fillOpacity: 0.9
+                    }).addTo(lastTripMap).bindPopup('<strong>Fin</strong>');
+
+                    lastTripMap.fitBounds(coordinates, { padding: [50, 50] });
+
+                    // Estadísticas
+                    document.getElementById('lastTripDate').textContent = SENTINEL.Formatter.date(trip.start_time, true);
+                    document.getElementById('lastTripDistance').textContent = SENTINEL.Formatter.distance(trip.distance);
+                    document.getElementById('lastTripDuration').textContent = SENTINEL.Formatter.duration(trip.duration);
+                    document.getElementById('lastTripPoints').textContent = gpsPoints.length;
+
+                } catch (error) {
+                    console.error('[MAP] Error:', error);
+                }
+            }
+
+            // Cargar mantenimiento
+            async function loadMaintenance() {
+                try {
+                    const data = await SENTINEL.API.get(`/api/vehicles/${vehicleId}/maintenance`);
+                    if (data.success) {
+                        displayMaintenance(data.maintenance || []);
+                    }
+                } catch (error) {
+                    console.error('[MAINTENANCE] Error:', error);
+                }
+            }
+
+            // Mostrar mantenimiento
+            function displayMaintenance(maintenance) {
+                const list = document.getElementById('maintenanceList');
+
+                if (maintenance.length === 0) {
+                    list.innerHTML = '<p class="no-data">No hay registros de mantenimiento</p>';
+                    return;
+                }
+
+                list.innerHTML = maintenance.map(m => `
+                    <div style="padding: 1rem; background: #f8fafc; border-radius: 8px; margin-bottom: 0.5rem; display: flex; justify-content: space-between; align-items: start;">
+                        <div>
+                            <strong style="color: #1e293b;">${m.type}</strong>
+                            <p style="margin: 0.25rem 0 0 0; color: #64748b; font-size: 0.9rem;">${SENTINEL.Formatter.date(m.date)}</p>
+                            ${m.notes ? `<p style="margin: 0.5rem 0 0 0; color: #475569; font-size: 0.9rem;">${m.notes}</p>` : ''}
+                        </div>
+                        <span style="color: #64748b; font-size: 0.85rem;">${m.mileage ? m.mileage + ' km' : ''}</span>
+                    </div>
+                `).join('');
+            }
+
+            // Event listeners
+            document.getElementById('editVehicleBtn').addEventListener('click', () => {
+                window.location.href = `fleet.html?edit=${vehicleId}`;
+            });
+
+            document.getElementById('startTripBtn').addEventListener('click', async () => {
+                try {
+                    const result = await SENTINEL.API.post('/api/trips/start', { vehicle_id: vehicleId });
+                    if (result.success) {
+                        SENTINEL.Toast.success('Viaje iniciado');
+                        SENTINEL.ActiveVehicle.set(vehicleId);
+                        setTimeout(() => window.location.href = 'index.html', 1500);
+                    }
+                } catch (error) {
+                    SENTINEL.Toast.error('Error iniciando viaje');
+                }
+            });
+
+            document.getElementById('tripsLimitSelect').addEventListener('change', loadTrips);
+
+            // Inicializar
+            await loadVehicleData();
+        });
+
+        function viewTrip(tripId) {
+            SENTINEL.Toast.info(`Ver viaje #${tripId} (próximamente)`);
+        }
+    </script>
+</body>
+</html>
