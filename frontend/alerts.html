@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SENTINEL PRO - Sistema de Alertas</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/alerts.css">
+</head>
+<body>
+    <!-- HEADER CON NAVEGACIÓN -->
+    <header class="fleet-header">
+        <div class="header-content">
+            <div class="header-left">
+                <h1>
+                    <i class="fas fa-shield-halved"></i>
+                    SENTINEL PRO
+                </h1>
+                <p>Sistema de Alertas y Monitoreo</p>
+            </div>
+            <nav class="main-nav">
+                <a href="index.html" class="nav-link">
+                    <i class="fas fa-tachometer-alt"></i>
+                    <span>Dashboard</span>
+                </a>
+                <a href="fleet.html" class="nav-link">
+                    <i class="fas fa-cars"></i>
+                    <span>Flotas</span>
+                </a>
+                <a href="analytics.html" class="nav-link">
+                    <i class="fas fa-chart-line"></i>
+                    <span>Análisis</span>
+                </a>
+                <a href="alerts.html" class="nav-link active">
+                    <i class="fas fa-bell"></i>
+                    <span>Alertas</span>
+                </a>
+                <a href="import.html" class="nav-link">
+                    <i class="fas fa-file-import"></i>
+                    <span>Importar CSV</span>
+                </a>
+            </nav>
+        </div>
+    </header>
+
+    <!-- ESTADÍSTICAS DE ALERTAS -->
+    <div class="alert-stats-banner">
+        <div class="stat-card-mini stat-critical">
+            <i class="fas fa-exclamation-circle"></i>
+            <div>
+                <span class="stat-value" id="critical_count">0</span>
+                <span class="stat-label">Críticas</span>
+            </div>
+        </div>
+        <div class="stat-card-mini stat-high">
+            <i class="fas fa-exclamation-triangle"></i>
+            <div>
+                <span class="stat-value" id="high_count">0</span>
+                <span class="stat-label">Altas</span>
+            </div>
+        </div>
+        <div class="stat-card-mini stat-medium">
+            <i class="fas fa-info-circle"></i>
+            <div>
+                <span class="stat-value" id="medium_count">0</span>
+                <span class="stat-label">Medias</span>
+            </div>
+        </div>
+        <div class="stat-card-mini stat-active">
+            <i class="fas fa-bell-on"></i>
+            <div>
+                <span class="stat-value" id="active_rules">0</span>
+                <span class="stat-label">Reglas Activas</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- CONTENEDOR PRINCIPAL -->
+    <div class="container alerts-container">
+
+        <!-- TABS DE NAVEGACIÓN -->
+        <div class="tabs-container">
+            <button class="tab-btn active" data-tab="alerts-tab">
+                <i class="fas fa-bell"></i> Alertas Recientes
+            </button>
+            <button class="tab-btn" data-tab="rules-tab">
+                <i class="fas fa-sliders-h"></i> Reglas de Alertas
+            </button>
+            <button class="tab-btn" data-tab="stats-tab">
+                <i class="fas fa-chart-pie"></i> Estadísticas
+            </button>
+        </div>
+
+        <!-- TAB 1: ALERTAS RECIENTES -->
+        <div id="alerts-tab" class="tab-content active">
+            <div class="card">
+                <div class="card-header">
+                    <h2><i class="fas fa-bell"></i> Alertas Recientes</h2>
+                    <div class="header-actions">
+                        <select id="filterVehicle" class="filter-select">
+                            <option value="">Todos los vehículos</option>
+                        </select>
+                        <select id="filterSeverity" class="filter-select">
+                            <option value="">Todas las severidades</option>
+                            <option value="critical">Crítico</option>
+                            <option value="high">Alto</option>
+                            <option value="medium">Medio</option>
+                            <option value="low">Bajo</option>
+                        </select>
+                        <select id="filterAcknowledged" class="filter-select">
+                            <option value="false">No reconocidas</option>
+                            <option value="">Todas</option>
+                            <option value="true">Reconocidas</option>
+                        </select>
+                        <button id="acknowledgeAllBtn" class="btn btn-sm btn-secondary">
+                            <i class="fas fa-check-double"></i> Reconocer Todas
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div id="alertsList" class="alerts-list">
+                        <!-- Alertas se cargarán aquí -->
+                        <div class="loading-placeholder">
+                            <i class="fas fa-spinner fa-spin"></i>
+                            <p>Cargando alertas...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 2: REGLAS DE ALERTAS -->
+        <div id="rules-tab" class="tab-content">
+            <div class="card">
+                <div class="card-header">
+                    <h2><i class="fas fa-sliders-h"></i> Reglas de Alertas</h2>
+                    <div class="header-actions">
+                        <select id="ruleVehicleFilter" class="filter-select">
+                            <option value="">Todos los vehículos</option>
+                        </select>
+                        <button id="addRuleBtn" class="btn btn-primary">
+                            <i class="fas fa-plus"></i> Nueva Regla
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div id="rulesList" class="rules-list">
+                        <!-- Reglas se cargarán aquí -->
+                        <div class="loading-placeholder">
+                            <i class="fas fa-spinner fa-spin"></i>
+                            <p>Cargando reglas...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 3: ESTADÍSTICAS -->
+        <div id="stats-tab" class="tab-content">
+            <div class="stats-grid">
+                <div class="card">
+                    <div class="card-header">
+                        <h3><i class="fas fa-chart-pie"></i> Alertas por Severidad (últimos 7 días)</h3>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="severityChart"></canvas>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-header">
+                        <h3><i class="fas fa-chart-bar"></i> Alertas por Tipo</h3>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="typeChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h3><i class="fas fa-info-circle"></i> Resumen de Alertas</h3>
+                </div>
+                <div class="card-body">
+                    <div id="statsContent" class="stats-content">
+                        <!-- Estadísticas se cargarán aquí -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL CREAR/EDITAR REGLA -->
+    <div id="ruleModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="ruleModalTitle">
+                    <i class="fas fa-sliders-h"></i>
+                    Nueva Regla de Alerta
+                </h2>
+                <button class="modal-close" id="closeRuleModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="ruleForm">
+                    <input type="hidden" id="ruleId">
+
+                    <div class="form-group">
+                        <label for="ruleName">
+                            <i class="fas fa-tag"></i> Nombre de la Regla *
+                        </label>
+                        <input type="text" id="ruleName" placeholder="Ej: Temperatura Crítica" required>
+                    </form-group>
+
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="ruleVehicle">
+                                <i class="fas fa-car"></i> Vehículo
+                            </label>
+                            <select id="ruleVehicle">
+                                <option value="">Todos los vehículos (global)</option>
+                            </select>
+                            <small>Dejar vacío para aplicar a todos los vehículos</small>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="ruleParameter">
+                                <i class="fas fa-gauge"></i> Parámetro *
+                            </label>
+                            <select id="ruleParameter" required>
+                                <option value="rpm">RPM del Motor</option>
+                                <option value="speed">Velocidad</option>
+                                <option value="coolant_temp">Temperatura del Refrigerante</option>
+                                <option value="intake_temp">Temperatura de Admisión</option>
+                                <option value="engine_load">Carga del Motor</option>
+                                <option value="throttle_pos">Posición del Acelerador</option>
+                                <option value="fuel_pressure">Presión de Combustible</option>
+                                <option value="maf">Flujo de Aire (MAF)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="ruleCondition">
+                                <i class="fas fa-code-compare"></i> Condición *
+                            </label>
+                            <select id="ruleCondition" required>
+                                <option value=">">Mayor que (>)</option>
+                                <option value="<">Menor que (<)</option>
+                                <option value=">=">Mayor o igual (>=)</option>
+                                <option value="<=">Menor o igual (<=)</option>
+                                <option value="==">Igual a (==)</option>
+                                <option value="!=">Diferente de (!=)</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="ruleThreshold">
+                                <i class="fas fa-sliders"></i> Umbral *
+                            </label>
+                            <input type="number" id="ruleThreshold" step="0.1" placeholder="Ej: 95" required>
+                            <small id="thresholdHint">Valor para comparar</small>
+                        </div>
+                    </div>
+
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="ruleSeverity">
+                                <i class="fas fa-exclamation-triangle"></i> Severidad *
+                            </label>
+                            <select id="ruleSeverity" required>
+                                <option value="low">Bajo</option>
+                                <option value="medium">Medio</option>
+                                <option value="high">Alto</option>
+                                <option value="critical">Crítico</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="ruleMessage">
+                            <i class="fas fa-message"></i> Plantilla del Mensaje
+                        </label>
+                        <textarea id="ruleMessage" rows="2" placeholder="Ej: ⚠️ Temperatura crítica: {value}°C (máximo: {threshold}°C)"></textarea>
+                        <small>Variables disponibles: {value}, {threshold}, {parameter}</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="ruleNotifySound" checked>
+                            <i class="fas fa-volume-high"></i> Reproducir sonido de alerta
+                        </label>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="ruleNotifyEmail">
+                            <i class="fas fa-envelope"></i> Enviar notificación por email
+                        </label>
+                    </div>
+
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" id="cancelRuleBtn">
+                            Cancelar
+                        </button>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save"></i>
+                            Guardar Regla
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL CONFIRMACIÓN ELIMINAR REGLA -->
+    <div id="deleteRuleModal" class="modal">
+        <div class="modal-content modal-small">
+            <div class="modal-header">
+                <h2>
+                    <i class="fas fa-exclamation-triangle"></i>
+                    Confirmar Eliminación
+                </h2>
+                <button class="modal-close" id="closeDeleteRuleModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p>¿Estás seguro de que deseas eliminar esta regla de alerta?</p>
+                <p id="deleteRuleName" class="delete-rule-name"></p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="cancelDeleteRuleBtn">
+                    Cancelar
+                </button>
+                <button class="btn btn-danger" id="confirmDeleteRuleBtn">
+                    <i class="fas fa-trash"></i>
+                    Eliminar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- FOOTER -->
+    <footer>
+        <p>SENTINEL PRO v10.0 - Sistema de Gestión de Flotas © 2025</p>
+        <p style="font-size: 0.8rem; margin-top: 0.5rem; opacity: 0.7;">
+            Monitoreo en tiempo real | Alertas configurables | Base de datos SQLite
+        </p>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="js/common.js"></script>
+    <script src="js/alerts.js"></script>
+</body>
+</html>
