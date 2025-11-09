@@ -142,6 +142,25 @@ class DatabaseManager:
                 )
             ''')
 
+            # Tabla de importaciones CSV
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS imports (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    vehicle_id INTEGER,
+                    source_type TEXT NOT NULL,
+                    filename TEXT NOT NULL,
+                    file_hash TEXT NOT NULL,
+                    rows_total INTEGER DEFAULT 0,
+                    rows_imported INTEGER DEFAULT 0,
+                    rows_skipped INTEGER DEFAULT 0,
+                    trips_created INTEGER DEFAULT 0,
+                    import_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    imported_by TEXT,
+                    can_rollback BOOLEAN DEFAULT 1,
+                    FOREIGN KEY (vehicle_id) REFERENCES vehicles(id)
+                )
+            ''')
+
             # Índices para mejorar performance
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_trips_vehicle ON trips(vehicle_id)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_trips_start ON trips(start_time)')
@@ -149,6 +168,8 @@ class DatabaseManager:
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_obd_timestamp ON obd_data(timestamp)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_maintenance_vehicle ON maintenance(vehicle_id)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_alerts_vehicle ON alerts(vehicle_id)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_imports_vehicle ON imports(vehicle_id)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_imports_hash ON imports(file_hash)')
 
             conn.commit()
             print("[DB] ✓ Base de datos inicializada correctamente")

@@ -18,6 +18,7 @@ import csv
 from datetime import datetime, timedelta
 from werkzeug.utils import secure_filename
 import statistics
+from csv_importer import CSVImporter
 
 # ----- CONFIGURACIÓN OBLIGATORIA -----
 OBD_PORT = "COM6"  # CAMBIA ESTO A TU PUERTO
@@ -835,6 +836,11 @@ except Exception as e:
     print(f"[DB] ⚠️  Error cargando DatabaseManager: {e}")
     db = None
 
+# Inicializar CSV Importer
+csv_importer = CSVImporter(db) if db else None
+if csv_importer:
+    print("[CSV-IMPORTER] ✓ CSVImporter inicializado")
+
 # --- ENDPOINTS DE VEHÍCULOS ---
 
 @app.route("/api/vehicles", methods=["POST"])
@@ -1280,6 +1286,275 @@ def get_vehicle_alerts_endpoint(vehicle_id):
 
     except Exception as e:
         print(f"[API] Error obteniendo alertas: {e}")
+        return jsonify({"error": str(e)}), 500
+
+# --- ENDPOINTS DE IMPORTACIÓN CSV ---
+
+@app.route("/api/import/analyze", methods=["POST"])
+def analyze_csv_endpoint():
+    """
+    Analiza un archivo CSV y detecta su formato
+
+    Form Data:
+        file: Archivo CSV a analizar
+
+    Returns:
+        Información detallada del CSV (fuente, columnas, preview, etc.)
+    """
+    if not csv_importer:
+        return jsonify({"error": "CSV Importer no disponible"}), 500
+
+    try:
+        # Verificar que se subió un archivo
+        if 'file' not in request.files:
+            return jsonify({"error": "No se proporcionó ningún archivo"}), 400
+
+        file = request.files['file']
+
+        if file.filename == '':
+            return jsonify({"error": "Nombre de archivo vacío"}), 400
+
+        # Verificar extensión
+        if not file.filename.endswith('.csv'):
+            return jsonify({"error": "El archivo debe ser CSV"}), 400
+
+        # Guardar archivo temporalmente
+        filename = secure_filename(file.filename)
+        temp_path = os.path.join(app.config['UPLOAD_FOLDER'], f"temp_{int(time.time())}_{filename}")
+        file.save(temp_path)
+
+        # Analizar CSV
+        analysis = csv_importer.analyze_csv(temp_path)
+
+        # Agregar información del archivo temporal
+        analysis['temp_file'] = os.path.basename(temp_path)
+        analysis['original_filename'] = filename
+
+        return jsonify(analysis)
+
+    except Exception as e:
+        print(f"[API] Error analizando CSV: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/import/execute", methods=["POST"])
+def execute_import_endpoint():
+    """
+    Ejecuta la importación de un CSV previamente analizado
+
+    Body JSON:
+        temp_file: Nombre del archivo temporal
+        vehicle_id: ID del vehículo destino (null para crear nuevo)
+        source_type: Tipo de fuente detectada
+        column_mappings: Mapeo de columnas
+        create_trips: Si dividir en viajes
+        trip_gap_minutes: Minutos para separar viajes
+        skip_invalid_rows: Si omitir filas inválidas
+        vehicle_data: (Opcional) Datos para crear nuevo vehículo
+
+    Returns:
+        Resultado de la importación
+    """
+    if not csv_importer:
+        return jsonify({"error": "CSV Importer no disponible"}), 500
+
+    if not db:
+        return jsonify({"error": "Base de datos no disponible"}), 500
+
+    try:
+        data = request.json
+
+        # Obtener parámetros
+        temp_file = data.get('temp_file')
+        vehicle_id = data.get('vehicle_id')
+        source_type = data.get('source_type')
+        column_mappings = data.get('column_mappings', {})
+        create_trips = data.get('create_trips', True)
+        trip_gap_minutes = data.get('trip_gap_minutes', 30)
+        skip_invalid_rows = data.get('skip_invalid_rows', True)
+        vehicle_data = data.get('vehicle_data')
+
+        if not temp_file:
+            return jsonify({"error": "temp_file requerido"}), 400
+
+        # Construir ruta completa
+        temp_path = os.path.join(app.config['UPLOAD_FOLDER'], temp_file)
+
+        if not os.path.exists(temp_path):
+            return jsonify({"error": "Archivo temporal no encontrado"}), 404
+
+        # Crear vehículo nuevo si se proporcionó vehicle_data
+        if not vehicle_id and vehicle_data:
+            vehicle_id = db.create_vehicle(
+                vin=vehicle_data.get('vin', 'IMPORTED'),
+                brand=vehicle_data.get('brand', 'Unknown'),
+                model=vehicle_data.get('model', 'Unknown'),
+                year=vehicle_data.get('year', 2020),
+                fuel_type=vehicle_data.get('fuel_type', 'gasolina'),
+                transmission=vehicle_data.get('transmission', 'manual'),
+                mileage=vehicle_data.get('mileage', 0),
+                notes=vehicle_data.get('notes')
+            )
+            print(f"[CSV-IMPORT] ✓ Vehículo creado: ID {vehicle_id}")
+
+        if not vehicle_id:
+            return jsonify({"error": "vehicle_id o vehicle_data requerido"}), 400
+
+        # Ejecutar importación
+        result = csv_importer.import_csv(
+            csv_path=temp_path,
+            vehicle_id=vehicle_id,
+            source_type=source_type,
+            column_mappings=column_mappings,
+            create_trips=create_trips,
+            trip_gap_minutes=trip_gap_minutes,
+            skip_invalid_rows=skip_invalid_rows
+        )
+
+        # Limpiar archivo temporal
+        try:
+            os.remove(temp_path)
+        except:
+            pass
+
+        return jsonify(result)
+
+    except Exception as e:
+        print(f"[API] Error ejecutando importación: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/import/history", methods=["GET"])
+def get_import_history_endpoint():
+    """Obtener historial de importaciones"""
+    if not db:
+        return jsonify({"error": "Base de datos no disponible"}), 500
+
+    try:
+        vehicle_id = request.args.get('vehicle_id', type=int)
+
+        conn = db._get_connection()
+        cursor = conn.cursor()
+
+        if vehicle_id:
+            cursor.execute('''
+                SELECT
+                    i.*,
+                    v.brand,
+                    v.model,
+                    v.year
+                FROM imports i
+                LEFT JOIN vehicles v ON i.vehicle_id = v.id
+                WHERE i.vehicle_id = ?
+                ORDER BY i.import_date DESC
+            ''', (vehicle_id,))
+        else:
+            cursor.execute('''
+                SELECT
+                    i.*,
+                    v.brand,
+                    v.model,
+                    v.year
+                FROM imports i
+                LEFT JOIN vehicles v ON i.vehicle_id = v.id
+                ORDER BY i.import_date DESC
+            ''')
+
+        columns = [desc[0] for desc in cursor.description]
+        imports = [dict(zip(columns, row)) for row in cursor.fetchall()]
+
+        return jsonify({
+            "success": True,
+            "count": len(imports),
+            "imports": imports
+        })
+
+    except Exception as e:
+        print(f"[API] Error obteniendo historial: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/import/<int:import_id>", methods=["GET"])
+def get_import_detail_endpoint(import_id):
+    """Obtener detalles de una importación específica"""
+    if not db:
+        return jsonify({"error": "Base de datos no disponible"}), 500
+
+    try:
+        conn = db._get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            SELECT
+                i.*,
+                v.brand,
+                v.model,
+                v.year
+            FROM imports i
+            LEFT JOIN vehicles v ON i.vehicle_id = v.id
+            WHERE i.id = ?
+        ''', (import_id,))
+
+        row = cursor.fetchone()
+
+        if not row:
+            return jsonify({"error": "Importación no encontrada"}), 404
+
+        columns = [desc[0] for desc in cursor.description]
+        import_data = dict(zip(columns, row))
+
+        return jsonify({
+            "success": True,
+            "import": import_data
+        })
+
+    except Exception as e:
+        print(f"[API] Error obteniendo detalle: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/import/<int:import_id>/rollback", methods=["DELETE"])
+def rollback_import_endpoint(import_id):
+    """
+    Revierte una importación (elimina viajes y datos creados)
+    NOTA: Esta operación es irreversible
+    """
+    if not db:
+        return jsonify({"error": "Base de datos no disponible"}), 500
+
+    try:
+        conn = db._get_connection()
+        cursor = conn.cursor()
+
+        # Obtener información de la importación
+        cursor.execute('SELECT * FROM imports WHERE id = ?', (import_id,))
+        import_row = cursor.fetchone()
+
+        if not import_row:
+            return jsonify({"error": "Importación no encontrada"}), 404
+
+        # Verificar si se puede revertir
+        columns = [desc[0] for desc in cursor.description]
+        import_data = dict(zip(columns, import_row))
+
+        if not import_data.get('can_rollback'):
+            return jsonify({"error": "Esta importación no se puede revertir"}), 400
+
+        # TODO: Implementar lógica de rollback
+        # Por ahora solo marcar como no reversible
+        cursor.execute('''
+            UPDATE imports
+            SET can_rollback = 0
+            WHERE id = ?
+        ''', (import_id,))
+
+        conn.commit()
+
+        return jsonify({
+            "success": True,
+            "message": "Importación marcada para rollback (funcionalidad en desarrollo)"
+        })
+
+    except Exception as e:
+        print(f"[API] Error en rollback: {e}")
         return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
