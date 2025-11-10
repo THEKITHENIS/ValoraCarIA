@@ -87,11 +87,16 @@
             <!-- Mensaje para modo nuevo (visible solo en modo new) -->
             <div id="newVehicleMessage" class="info-message" style="display: none;">
                 <i class="fas fa-info-circle"></i>
-                <p>Completa los datos del vehículo en la sección "Configuración del Vehículo" a continuación.</p>
+                <p>Completa los datos del vehículo en la sección "Configuración del Vehículo" y haz clic en "Guardar Nuevo Vehículo".</p>
             </div>
 
             <!-- Uploader CSV (visible solo en modo import) -->
             <div id="csvImportSection" class="csv-import-container" style="display: none;">
+                <div class="warning-message" id="csvWarningNoVehicle">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <p><strong>¡Atención!</strong> Los archivos CSV contienen datos del motor pero no información del vehículo.</p>
+                    <p>Debes configurar el vehículo en la sección "Configuración del Vehículo" antes de importar.</p>
+                </div>
                 <p class="info-text">
                     <i class="fas fa-info-circle"></i>
                     Sube archivos CSV de Torque, OBD11, Carista, VCDS u otros dispositivos de diagnóstico.
@@ -149,6 +154,16 @@
                         <option value="electrico">Eléctrico</option>
                     </select>
                 </div>
+            </div>
+
+            <!-- Botón para guardar nuevo vehículo (solo visible en modo nuevo o import) -->
+            <div id="saveNewVehicleSection" style="display: none; margin-top: 1.5rem;">
+                <button id="saveNewVehicleBtn" class="btn btn-success btn-large">
+                    <i class="fas fa-save"></i> Guardar Nuevo Vehículo
+                </button>
+                <p class="small-text" style="margin-top: 0.5rem; color: #64748b;">
+                    <i class="fas fa-info-circle"></i> El vehículo se guardará en tu flota y quedará activo para el registro de datos.
+                </p>
             </div>
         </div>
 

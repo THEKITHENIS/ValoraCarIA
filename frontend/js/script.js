@@ -89,6 +89,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const newMessage = document.getElementById('newVehicleMessage');
         const importSection = document.getElementById('csvImportSection');
         const configCard = document.getElementById('vehicleConfigCard');
+        const saveNewVehicleSection = document.getElementById('saveNewVehicleSection');
+        const csvWarning = document.getElementById('csvWarningNoVehicle');
 
         if (!modeButtons || modeButtons.length === 0) return; // No hay selector de modo
 
@@ -106,16 +108,33 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (newMessage) newMessage.style.display = workMode === 'new' ? 'block' : 'none';
                 if (importSection) importSection.style.display = workMode === 'import' ? 'block' : 'none';
 
+                // Mostrar/ocultar botón de guardar nuevo vehículo
+                if (saveNewVehicleSection) {
+                    saveNewVehicleSection.style.display = (workMode === 'new' || workMode === 'import') ? 'block' : 'none';
+                }
+
+                // Mostrar/ocultar advertencia CSV según si hay vehículo activo
+                if (csvWarning && workMode === 'import') {
+                    const activeVehicleId = localStorage.getItem('activeVehicleId');
+                    csvWarning.style.display = activeVehicleId ? 'none' : 'block';
+                }
+
                 // Configurar formulario según modo
                 if (workMode === 'fleet') {
                     loadFleetVehicles();
                     disableVehicleForm();
+                    loadMaintenanceLog(); // Cargar historial del vehículo activo
                 } else if (workMode === 'new') {
                     clearVehicleForm();
                     enableVehicleForm();
+                    clearMaintenanceLog(); // Limpiar historial
                 } else if (workMode === 'import') {
-                    clearVehicleForm();
-                    enableVehicleForm();
+                    const activeVehicleId = localStorage.getItem('activeVehicleId');
+                    if (!activeVehicleId) {
+                        clearVehicleForm();
+                        enableVehicleForm();
+                        clearMaintenanceLog(); // Limpiar historial
+                    }
                 }
             });
         });
@@ -162,8 +181,24 @@ document.addEventListener('DOMContentLoaded', () => {
         const proceedBtn = document.getElementById('proceedToImport');
         if (proceedBtn) {
             proceedBtn.addEventListener('click', () => {
+                // Validar que haya vehículo configurado
+                const activeVehicleId = localStorage.getItem('activeVehicleId');
+                if (!activeVehicleId) {
+                    if (window.SENTINEL && window.SENTINEL.Toast) {
+                        window.SENTINEL.Toast.error('Debes configurar un vehículo antes de importar datos CSV');
+                    } else {
+                        alert('Debes configurar un vehículo antes de importar datos CSV');
+                    }
+                    return;
+                }
                 window.location.href = 'import.html';
             });
+        }
+
+        // Botón guardar nuevo vehículo
+        const saveNewVehicleBtn = document.getElementById('saveNewVehicleBtn');
+        if (saveNewVehicleBtn) {
+            saveNewVehicleBtn.addEventListener('click', saveNewVehicle);
         }
 
         // Iniciar en modo fleet por defecto
@@ -230,6 +265,116 @@ document.addEventListener('DOMContentLoaded', () => {
             if (window.SENTINEL && window.SENTINEL.Toast) {
                 window.SENTINEL.Toast.error('Error al cargar el vehículo');
             }
+        }
+    }
+
+    // Guardar nuevo vehículo en la base de datos
+    async function saveNewVehicle() {
+        // Validar campos requeridos
+        if (!vehicleBrand || !vehicleBrand.value.trim()) {
+            if (window.SENTINEL && window.SENTINEL.Toast) {
+                window.SENTINEL.Toast.error('La marca del vehículo es obligatoria');
+            } else {
+                alert('La marca del vehículo es obligatoria');
+            }
+            vehicleBrand.focus();
+            return;
+        }
+
+        if (!vehicleModel || !vehicleModel.value.trim()) {
+            if (window.SENTINEL && window.SENTINEL.Toast) {
+                window.SENTINEL.Toast.error('El modelo del vehículo es obligatorio');
+            } else {
+                alert('El modelo del vehículo es obligatorio');
+            }
+            vehicleModel.focus();
+            return;
+        }
+
+        if (!vehicleYear || !vehicleYear.value) {
+            if (window.SENTINEL && window.SENTINEL.Toast) {
+                window.SENTINEL.Toast.error('El año del vehículo es obligatorio');
+            } else {
+                alert('El año del vehículo es obligatorio');
+            }
+            vehicleYear.focus();
+            return;
+        }
+
+        // Preparar datos del vehículo
+        const vehicleData = {
+            brand: vehicleBrand.value.trim(),
+            model: vehicleModel.value.trim(),
+            year: parseInt(vehicleYear.value),
+            mileage: vehicleMileage && vehicleMileage.value ? parseInt(vehicleMileage.value) : 0,
+            transmission: vehicleTransmission ? vehicleTransmission.value : 'manual',
+            fuel_type: vehicleType ? vehicleType.value : 'gasolina'
+        };
+
+        // Deshabilitar botón mientras se guarda
+        const saveBtn = document.getElementById('saveNewVehicleBtn');
+        const originalText = saveBtn.innerHTML;
+        saveBtn.disabled = true;
+        saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando...';
+
+        try {
+            const response = await fetch(`${API_URL}/api/vehicles`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(vehicleData)
+            });
+
+            if (!response.ok) {
+                throw new Error('Error al guardar el vehículo');
+            }
+
+            const result = await response.json();
+            const newVehicleId = result.vehicle_id || result.id;
+
+            // Guardar como vehículo activo
+            localStorage.setItem('activeVehicleId', newVehicleId);
+            saveVehicleInfo();
+
+            // Cargar historial (vacío para nuevo vehículo)
+            loadMaintenanceLog();
+
+            // Ocultar advertencia CSV si estamos en modo import
+            const csvWarning = document.getElementById('csvWarningNoVehicle');
+            if (csvWarning && workMode === 'import') {
+                csvWarning.style.display = 'none';
+            }
+
+            // Mostrar feedback de éxito
+            if (window.SENTINEL && window.SENTINEL.Toast) {
+                window.SENTINEL.Toast.success('¡Vehículo guardado exitosamente!');
+            } else {
+                alert('¡Vehículo guardado exitosamente!');
+            }
+
+            // Cambiar botón a estado "guardado"
+            saveBtn.innerHTML = '<i class="fas fa-check-circle"></i> Vehículo Guardado';
+            saveBtn.classList.remove('btn-success');
+            saveBtn.classList.add('btn-secondary');
+
+            // Después de 3 segundos, permitir guardar de nuevo
+            setTimeout(() => {
+                saveBtn.disabled = false;
+                saveBtn.innerHTML = originalText;
+                saveBtn.classList.remove('btn-secondary');
+                saveBtn.classList.add('btn-success');
+            }, 3000);
+
+        } catch (error) {
+            console.error('Error guardando vehículo:', error);
+            if (window.SENTINEL && window.SENTINEL.Toast) {
+                window.SENTINEL.Toast.error('Error al guardar el vehículo. Intenta de nuevo.');
+            } else {
+                alert('Error al guardar el vehículo. Intenta de nuevo.');
+            }
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = originalText;
         }
     }
 
@@ -1286,14 +1431,31 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     function saveMaintenanceLog() {
-        localStorage.setItem('maintenanceHistory', JSON.stringify(maintenanceHistory));
+        const activeVehicleId = localStorage.getItem('activeVehicleId');
+        if (activeVehicleId) {
+            localStorage.setItem(`maintenanceHistory_${activeVehicleId}`, JSON.stringify(maintenanceHistory));
+        }
     }
-    
+
     function loadMaintenanceLog() {
-        const stored = localStorage.getItem('maintenanceHistory');
-        if (stored) {
-            maintenanceHistory = JSON.parse(stored);
+        const activeVehicleId = localStorage.getItem('activeVehicleId');
+        if (activeVehicleId) {
+            const stored = localStorage.getItem(`maintenanceHistory_${activeVehicleId}`);
+            if (stored) {
+                maintenanceHistory = JSON.parse(stored);
+            } else {
+                maintenanceHistory = [];
+            }
             renderMaintenanceLog();
+        } else {
+            clearMaintenanceLog();
+        }
+    }
+
+    function clearMaintenanceLog() {
+        maintenanceHistory = [];
+        if (maintenanceLog) {
+            maintenanceLog.innerHTML = '<li class="no-data"><i class="fas fa-info-circle"></i> No hay vehículo activo. Selecciona o crea un vehículo.</li>';
         }
     }
     

@@ -1492,3 +1492,90 @@ footer p {
     font-size: 0.85rem;
     color: #64748b;
 }
+
+/* === MEJORAS PARA GESTIÓN DE VEHÍCULOS === */
+
+/* Mensaje de advertencia para CSV */
+.warning-message {
+    margin-top: 1.5rem;
+    padding: 1.5rem;
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.1) 0%, rgba(220, 38, 38, 0.05) 100%);
+    border-left: 4px solid #ef4444;
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.warning-message i {
+    font-size: 1.5rem;
+    color: #ef4444;
+    margin-bottom: 0.5rem;
+}
+
+.warning-message p {
+    margin: 0;
+    color: #475569;
+    line-height: 1.6;
+}
+
+.warning-message strong {
+    color: #dc2626;
+}
+
+/* Botón de éxito */
+.btn-success {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    border: none;
+    color: white;
+    box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+}
+
+.btn-success:hover {
+    background: linear-gradient(135deg, #059669 0%, #047857 100%);
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+    transform: translateY(-1px);
+}
+
+.btn-success:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 6px rgba(16, 185, 129, 0.3);
+}
+
+/* Botón grande */
+.btn-large {
+    padding: 1rem 2rem;
+    font-size: 1.1rem;
+    font-weight: 600;
+    width: 100%;
+    justify-content: center;
+}
+
+/* Mejora para info-message */
+.info-message p {
+    line-height: 1.6;
+}
+
+/* Mejora para .info-text */
+.info-text {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+/* Estado de vehículo guardado */
+.vehicle-saved-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    background: rgba(16, 185, 129, 0.1);
+    border-radius: 6px;
+    color: #059669;
+    font-size: 0.9rem;
+    margin-top: 1rem;
+}
+
+.vehicle-saved-indicator i {
+    color: #10b981;
+}
