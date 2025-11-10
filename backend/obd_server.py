@@ -63,6 +63,36 @@ vehicle_health = {
     "last_update": None
 }
 
+# === DETECCIÓN DINÁMICA DE PIDs ===
+# Lista completa de PIDs a intentar leer (basada en especificación OBD-II completa)
+ALL_POSSIBLE_PIDS = [
+    'RPM', 'SPEED', 'THROTTLE_POS', 'ENGINE_LOAD', 'COOLANT_TEMP',
+    'INTAKE_TEMP', 'MAF', 'INTAKE_PRESSURE', 'BAROMETRIC_PRESSURE',
+    'TIMING_ADVANCE', 'FUEL_PRESSURE', 'FUEL_RAIL_PRESSURE_VAC',
+    'FUEL_RAIL_PRESSURE_DIRECT', 'FUEL_RAIL_PRESSURE_ABS', 'COMMANDED_EGR',
+    'EGR_ERROR', 'EVAPORATIVE_PURGE', 'FUEL_LEVEL', 'DISTANCE_W_MIL',
+    'COMMANDED_EQUIV_RATIO', 'RELATIVE_THROTTLE_POS', 'AMBIANT_AIR_TEMP',
+    'ABSOLUTE_THROTTLE_POS_B', 'ABSOLUTE_THROTTLE_POS_C', 'ACCELERATOR_POS_D',
+    'ACCELERATOR_POS_E', 'ACCELERATOR_POS_F', 'COMMANDED_THROTTLE_ACTUATOR',
+    'RUN_TIME', 'DISTANCE_SINCE_DTC_CLEAR', 'EVAP_VAPOR_PRESSURE',
+    'CATALYST_TEMP_B1S1', 'CATALYST_TEMP_B2S1', 'CATALYST_TEMP_B1S2',
+    'CATALYST_TEMP_B2S2', 'CONTROL_MODULE_VOLTAGE', 'ABSOLUTE_LOAD',
+    'TIME_SINCE_DTC_CLEAR', 'FUEL_TYPE', 'ETHANOL_PERCENT',
+    'EVAP_VAPOR_PRESSURE_ABS', 'EVAP_VAPOR_PRESSURE_ALT', 'SHORT_O2_TRIM_B1',
+    'LONG_O2_TRIM_B1', 'SHORT_O2_TRIM_B2', 'LONG_O2_TRIM_B2',
+    'RELATIVE_ACCEL_POS', 'HYBRID_BATTERY_REMAINING', 'OIL_TEMP',
+    'FUEL_INJECTION_TIMING', 'FUEL_RATE', 'EXHAUST_GAS_TEMP_B1S1',
+    'EXHAUST_GAS_TEMP_B1S2', 'EXHAUST_GAS_TEMP_B2S1', 'EXHAUST_GAS_TEMP_B2S2',
+    'DPF_TEMPERATURE', 'DPF_PRESSURE', 'SHORT_FUEL_TRIM_1', 'LONG_FUEL_TRIM_1',
+    'SHORT_FUEL_TRIM_2', 'LONG_FUEL_TRIM_2', 'O2_B1S1', 'O2_B1S2',
+    'O2_B1S3', 'O2_B1S4', 'O2_B2S1', 'O2_B2S2', 'O2_B2S3', 'O2_B2S4',
+    'WARMUPS_SINCE_DTC_CLEAR', 'RUN_TIME_MIL'
+]
+
+# Variables para PIDs disponibles del vehículo actual
+available_pids = []
+current_vehicle_pids_profile = {}
+
 # Inicialización Gemini
 model = None
 try:
@@ -470,6 +500,193 @@ def get_obd_health():
             "timestamp": datetime.now().isoformat()
         }), 200  # Retornar 200 aunque haya error para que el frontend sepa que el servidor está vivo
 
+@app.route('/api/obd/scan-available-pids', methods=['POST'])
+def scan_available_pids():
+    """
+    Escanea QUÉ PIDs están disponibles en el vehículo conectado
+    Usa el método de 3 reintentos para máxima fiabilidad
+    """
+    global available_pids, current_vehicle_pids_profile
+
+    if not connection or not connection.is_connected():
+        return jsonify({'error': 'OBD no conectado'}), 400
+
+    data = request.json
+    vehicle_id = data.get('vehicle_id')
+
+    print(f"\n🔍 Escaneando PIDs disponibles para vehículo {vehicle_id}...")
+    print(f"   Probando {len(ALL_POSSIBLE_PIDS)} PIDs posibles...")
+
+    available_pids = []
+    pids_data = []
+
+    # Probar cada PID con el método de 3 reintentos
+    for idx, pid_name in enumerate(ALL_POSSIBLE_PIDS):
+        if not hasattr(obd.commands, pid_name):
+            continue
+
+        try:
+            cmd = getattr(obd.commands, pid_name)
+            valor_final = None
+            unidad = ''
+
+            # 3 INTENTOS (método robusto)
+            for intento in range(3):
+                try:
+                    response = connection.query(cmd)
+
+                    if response and response.value is not None and not response.is_null():
+                        valor = response.value
+
+                        if hasattr(valor, 'magnitude'):
+                            valor_final = valor.magnitude
+                            unidad = str(response.unit) if hasattr(response, 'unit') else ''
+                        else:
+                            valor_final = valor
+                            unidad = ''
+
+                        break
+
+                except:
+                    pass
+
+                time.sleep(0.05)
+
+            # Si obtuvo valor después de 3 intentos
+            if valor_final is not None:
+                pid_info = {
+                    'name': pid_name,
+                    'command': str(cmd.command) if hasattr(cmd, 'command') else 'N/A',
+                    'description': cmd.desc if hasattr(cmd, 'desc') else '',
+                    'unit': unidad,
+                    'sample_value': float(valor_final) if isinstance(valor_final, (int, float)) else str(valor_final)
+                }
+                available_pids.append(pid_name)
+                pids_data.append(pid_info)
+                print(f"  ✅ {pid_name}: {valor_final} {unidad}")
+
+        except Exception as e:
+            # Error silencioso para no spam en consola
+            pass
+
+        # Pequeña pausa para no saturar el adaptador
+        time.sleep(0.03)
+
+        # Progreso cada 10 PIDs
+        if (idx + 1) % 10 == 0:
+            print(f"   Progreso: {idx + 1}/{len(ALL_POSSIBLE_PIDS)} PIDs probados...")
+
+    # Obtener protocolo del vehículo
+    protocol = "Unknown"
+    try:
+        if hasattr(connection, 'protocol_name'):
+            protocol = connection.protocol_name()
+        elif hasattr(connection, 'protocol'):
+            protocol = str(connection.protocol)
+    except:
+        pass
+
+    # Guardar perfil de PIDs para este vehículo
+    current_vehicle_pids_profile = {
+        'vehicle_id': vehicle_id,
+        'scan_date': datetime.now().isoformat(),
+        'total_pids': len(available_pids),
+        'pids': pids_data,
+        'protocol': protocol
+    }
+
+    # Guardar en base de datos
+    try:
+        db = get_db()
+        if db:
+            db.save_vehicle_pids_profile(vehicle_id, current_vehicle_pids_profile)
+    except Exception as e:
+        print(f"[SCAN] Advertencia: No se pudo guardar perfil en BD: {e}")
+
+    print(f"\n✅ Escaneo completado: {len(available_pids)} PIDs disponibles")
+    print(f"   Protocolo: {protocol}")
+
+    return jsonify({
+        'success': True,
+        'total_pids': len(available_pids),
+        'available_pids': available_pids,
+        'pids_data': pids_data,
+        'profile': current_vehicle_pids_profile
+    })
+
+@app.route('/api/obd/live-data-dynamic', methods=['GET'])
+def get_live_data_dynamic():
+    """
+    Lee TODOS los PIDs disponibles dinámicamente
+    Si no se escaneó antes, usa lista básica
+    """
+    if not connection or not connection.is_connected():
+        return jsonify({'error': 'OBD no conectado'}), 400
+
+    # Usar PIDs disponibles o lista básica
+    pids_to_read = available_pids if available_pids else [
+        'RPM', 'SPEED', 'ENGINE_LOAD', 'THROTTLE_POS', 'COOLANT_TEMP',
+        'INTAKE_TEMP', 'MAF', 'INTAKE_PRESSURE'
+    ]
+
+    data = {}
+
+    for pid_name in pids_to_read:
+        if not hasattr(obd.commands, pid_name):
+            continue
+
+        try:
+            cmd = getattr(obd.commands, pid_name)
+
+            # 2 reintentos (más rápido para live data)
+            for intento in range(2):
+                try:
+                    response = connection.query(cmd)
+
+                    if response and response.value is not None and not response.is_null():
+                        valor = response.value
+
+                        if hasattr(valor, 'magnitude'):
+                            data[pid_name.lower()] = valor.magnitude
+                        else:
+                            data[pid_name.lower()] = valor
+
+                        break
+
+                except:
+                    pass
+
+                time.sleep(0.02)
+
+        except:
+            pass
+
+    # Añadir timestamp
+    data['timestamp'] = datetime.now().isoformat()
+
+    return jsonify(data)
+
+@app.route('/api/vehicles/<int:vehicle_id>/pids-profile', methods=['GET'])
+def get_vehicle_pids_profile_endpoint(vehicle_id):
+    """
+    Obtiene el perfil de PIDs más reciente de un vehículo
+    """
+    try:
+        db = get_db()
+        if not db:
+            return jsonify({'error': 'Base de datos no disponible'}), 500
+
+        profile = db.get_vehicle_pids_profile(vehicle_id)
+
+        if not profile:
+            return jsonify(None), 200  # Retornar null si no hay perfil
+
+        return jsonify(profile)
+
+    except Exception as e:
+        print(f"[API] Error obteniendo perfil de PIDs: {e}")
+        return jsonify({'error': str(e)}), 500
+
 @app.route("/predictive_analysis", methods=["POST"])
 def predictive_analysis():
     global model, trip_data
@@ -871,7 +1088,7 @@ def generate_report():
 def analyze_current_trip():
     """
     Analiza el viaje actualmente en curso (Dashboard)
-    Solo para datos del viaje actual, mínimo 5 minutos
+    ACTUALIZADO: Usa TODOS los PIDs disponibles del vehículo
     """
     global model, trip_data
 
@@ -882,6 +1099,7 @@ def analyze_current_trip():
     vehicle_info = data.get("vehicle_info", {})
     trip_data_received = data.get("trip_data", [])
     transmission = data.get("transmission", "manual")
+    vehicle_id = data.get("vehicle_id")
 
     # Validar datos mínimos (5 minutos = ~100 registros a 3s cada uno)
     if len(trip_data_received) < 100:
@@ -892,23 +1110,43 @@ def analyze_current_trip():
         }), 400
 
     try:
-        # Calcular estadísticas del viaje actual
-        rpms = [p.get('rpm', 0) for p in trip_data_received if p.get('rpm')]
-        speeds = [p.get('speed', 0) for p in trip_data_received if p.get('speed')]
-        loads = [p.get('load', 0) for p in trip_data_received if p.get('load')]
-        temps = [p.get('temp', 0) for p in trip_data_received if p.get('temp')]
+        # Obtener perfil de PIDs disponibles del vehículo
+        pids_profile = None
+        if vehicle_id and db:
+            pids_profile = db.get_vehicle_pids_profile(vehicle_id)
+
+        # Analizar QUÉ PIDs están presentes en los datos del viaje
+        available_pids_in_trip = list(trip_data_received[0].keys()) if trip_data_received else []
+        available_pids_in_trip = [p for p in available_pids_in_trip if p != 'timestamp']
+
+        # Calcular estadísticas dinámicas para TODOS los PIDs disponibles
+        all_stats = {}
+        for pid_key in available_pids_in_trip:
+            values = [p.get(pid_key) for p in trip_data_received if p.get(pid_key) is not None]
+            if values and all(isinstance(v, (int, float)) for v in values):
+                try:
+                    all_stats[pid_key] = {
+                        'avg': round(statistics.mean(values), 2),
+                        'min': round(min(values), 2),
+                        'max': round(max(values), 2),
+                        'count': len(values)
+                    }
+                except:
+                    pass
 
         duration_min = len(trip_data_received) * 3 / 60  # 3 segundos por punto
 
-        stats = {
-            "rpm_avg": round(statistics.mean(rpms)) if rpms else 0,
-            "rpm_max": round(max(rpms)) if rpms else 0,
-            "speed_avg": round(statistics.mean(speeds)) if speeds else 0,
-            "speed_max": round(max(speeds)) if speeds else 0,
-            "load_avg": round(statistics.mean(loads)) if loads else 0,
-            "temp_max": round(max(temps)) if temps else 0,
+        # Resumen básico para compatibilidad
+        basic_stats = {
+            "rpm_avg": all_stats.get('rpm', {}).get('avg', 0),
+            "rpm_max": all_stats.get('rpm', {}).get('max', 0),
+            "speed_avg": all_stats.get('speed', {}).get('avg', 0),
+            "speed_max": all_stats.get('speed', {}).get('max', 0),
+            "load_avg": all_stats.get('load', {}).get('avg', 0),
+            "temp_max": all_stats.get('temp', {}).get('max', 0),
             "duration_min": round(duration_min, 1),
-            "data_points": len(trip_data_received)
+            "data_points": len(trip_data_received),
+            "total_pids_monitored": len(available_pids_in_trip)
         }
 
         # Análisis específico por transmisión
@@ -919,34 +1157,63 @@ def analyze_current_trip():
             'cvt': 'transmisión CVT - evalúa eficiencia de correa/cadena'
         }.get(transmission, 'transmisión MANUAL')
 
-        prompt = f"""Eres ingeniero de diagnóstico automotriz analizando un VIAJE EN CURSO.
+        # Preparar contexto de PIDs disponibles
+        pids_context = f"""
+PIDs MONITORIZADOS: {len(available_pids_in_trip)} parámetros
+Parámetros disponibles: {', '.join(available_pids_in_trip)}
+"""
+
+        if pids_profile:
+            pids_context += f"""
+Perfil del vehículo: {pids_profile.get('total_pids', 0)} PIDs detectados en escaneo
+Protocolo: {pids_profile.get('protocol', 'Unknown')}
+"""
+
+        # Estadísticas detalladas de TODOS los PIDs
+        detailed_stats = "\n".join([
+            f"- {pid.upper()}: promedio {stats['avg']}, rango [{stats['min']} - {stats['max']}]"
+            for pid, stats in all_stats.items()
+        ])
+
+        # Últimos 10 registros completos para contexto
+        recent_samples = trip_data_received[-10:]
+
+        prompt = f"""Eres ingeniero de diagnóstico automotriz analizando un VIAJE EN CURSO con MONITOREO COMPLETO.
 
 VEHÍCULO: {vehicle_info.get('brand', 'N/D')} {vehicle_info.get('model', 'N/D')} ({vehicle_info.get('year', 'N/D')})
 TRANSMISIÓN: {transmission.upper()} - {transmission_context}
 
-DATOS DEL VIAJE ACTUAL (EN CURSO):
-- Duración: {stats['duration_min']} minutos
-- Puntos de datos: {stats['data_points']}
-- RPM: promedio {stats['rpm_avg']}, máximo {stats['rpm_max']}
-- Velocidad: promedio {stats['speed_avg']} km/h, máximo {stats['speed_max']} km/h
-- Carga motor: promedio {stats['load_avg']}%
-- Temperatura máxima: {stats['temp_max']}°C
+{pids_context}
+
+ESTADÍSTICAS DEL VIAJE ACTUAL:
+Duración: {basic_stats['duration_min']} minutos
+Puntos de datos: {basic_stats['data_points']}
+
+ANÁLISIS DETALLADO DE TODOS LOS PARÁMETROS:
+{detailed_stats}
+
+ÚLTIMOS 10 REGISTROS COMPLETOS:
+{json.dumps(recent_samples, indent=2)}
 
 INSTRUCCIONES:
-1. Evalúa el ESTILO DE CONDUCCIÓN en este viaje
-2. Identifica patrones preocupantes (RPM excesivo, aceleraciones bruscas, etc.)
-3. Da recomendaciones ESPECÍFICAS para este tipo de transmisión
-4. Score de conducción 0-100 (100 = perfecto, eficiente)
+1. Analiza TODOS los {len(available_pids_in_trip)} parámetros disponibles (no solo los básicos)
+2. Identifica patrones anormales en CUALQUIER parámetro
+3. Evalúa eficiencia basándote en datos completos
+4. Para cada parámetro fuera de rango normal, explica implicaciones
+5. Da recomendaciones basadas en TODOS los datos, no solo RPM/velocidad
+6. Score de conducción 0-100 considerando ALL parámetros
 
 Responde SOLO con JSON válido:
 {{
     "driving_score": 85,
     "style": "Eficiente|Moderado|Agresivo",
-    "positives": ["Mantiene RPM bajas", "Velocidad constante"],
-    "concerns": ["Aceleraciones bruscas ocasionales"],
-    "recommendations": ["Suavizar aceleración en arranques", "Cambiar marcha antes de 3000 RPM"],
+    "positives": ["Lista de aspectos positivos"],
+    "concerns": ["Lista de preocupaciones identificadas en CUALQUIER parámetro"],
+    "recommendations": ["Recomendaciones específicas basadas en TODOS los datos"],
     "transmission_health": "Buena|Regular|Atención",
-    "trip_summary": "Conducción urbana moderada con algunos picos de RPM"
+    "parameters_analyzed": ["Lista de parámetros que fueron clave en el análisis"],
+    "unusual_readings": ["PIDs con lecturas fuera de lo normal"],
+    "trip_summary": "Resumen considerando TODOS los parámetros monitorizados"
 }}"""
 
         response = model.generate_content(prompt)
@@ -958,11 +1225,13 @@ Responde SOLO con JSON válido:
         else:
             ai_analysis = json.loads(cleaned)
 
-        # Añadir estadísticas al resultado
-        ai_analysis["trip_stats"] = stats
+        # Añadir estadísticas completas al resultado
+        ai_analysis["trip_stats"] = basic_stats
+        ai_analysis["all_parameters_stats"] = all_stats
+        ai_analysis["pids_monitored"] = available_pids_in_trip
         ai_analysis["analyzed_at"] = datetime.now().isoformat()
 
-        print(f"[AI-CURRENT-TRIP] ✓ Análisis completado: Score {ai_analysis.get('driving_score', 0)}/100")
+        print(f"[AI-CURRENT-TRIP] ✓ Análisis completado: Score {ai_analysis.get('driving_score', 0)}/100, {len(available_pids_in_trip)} PIDs analizados")
 
         return jsonify(ai_analysis)
 
@@ -975,7 +1244,7 @@ Responde SOLO con JSON válido:
 def analyze_vehicle_history():
     """
     Analiza el histórico completo de un vehículo (Fleet/Analytics/Vehicle-Detail)
-    Incluye predicciones, componentes en riesgo, valoración
+    ACTUALIZADO: Incluye TODOS los PIDs disponibles en el análisis
     """
     global model
 
@@ -1000,6 +1269,9 @@ def analyze_vehicle_history():
         if not vehicle:
             return jsonify({"error": "Vehículo no encontrado"}), 404
 
+        # Obtener perfil de PIDs disponibles del vehículo
+        pids_profile = db.get_vehicle_pids_profile(vehicle_id)
+
         # Obtener estadísticas
         stats = db.get_vehicle_stats(vehicle_id, start_date, end_date)
 
@@ -1009,8 +1281,42 @@ def analyze_vehicle_history():
         # Obtener mantenimiento
         maintenance = db.get_vehicle_maintenance(vehicle_id)
 
-        # Preparar prompt extenso
-        prompt = f"""Eres sistema de MANTENIMIENTO PREDICTIVO analizando histórico completo.
+        # Analizar qué PIDs se han registrado en el histórico
+        all_pids_used = set()
+        if trips:
+            for trip in trips[:5]:  # Analizar últimos 5 viajes
+                try:
+                    trip_data = db.get_trip_obd_data(trip['id'])
+                    if trip_data:
+                        for datapoint in trip_data[:10]:  # Muestra de datos
+                            all_pids_used.update(datapoint.keys())
+                except:
+                    pass
+
+        # Quitar timestamp de la lista
+        all_pids_used.discard('timestamp')
+        all_pids_used.discard('id')
+
+        # Preparar contexto de PIDs
+        pids_context = ""
+        if pids_profile:
+            pids_context = f"""
+PERFIL DE PIDs DEL VEHÍCULO:
+- Total de parámetros disponibles: {pids_profile.get('total_pids', 0)} PIDs
+- Protocolo OBD: {pids_profile.get('protocol', 'Unknown')}
+- Último escaneo: {pids_profile.get('scan_date', 'N/D')}
+- Parámetros registrados en histórico: {len(all_pids_used)} diferentes
+- PIDs monitorizados: {', '.join(sorted(all_pids_used))}
+"""
+        else:
+            pids_context = f"""
+PARÁMETROS MONITORIZADOS:
+- {len(all_pids_used)} parámetros diferentes registrados en histórico
+- PIDs: {', '.join(sorted(all_pids_used))}
+"""
+
+        # Preparar prompt extenso con contexto completo
+        prompt = f"""Eres sistema de MANTENIMIENTO PREDICTIVO analizando histórico completo con MONITOREO MULTI-PARÁMETRO.
 
 VEHÍCULO:
 {vehicle['brand']} {vehicle['model']} ({vehicle['year']})
@@ -1018,6 +1324,8 @@ VIN: {vehicle.get('vin', 'N/D')}
 Combustible: {vehicle.get('fuel_type', 'N/D')}
 Transmisión: {vehicle.get('transmission', 'N/D')}
 Kilometraje actual: {vehicle.get('mileage', 0)} km
+
+{pids_context}
 
 ESTADÍSTICAS DEL PERÍODO ANALIZADO:
 - Total viajes: {stats.get('total_trips', 0)}
@@ -1027,14 +1335,34 @@ ESTADÍSTICAS DEL PERÍODO ANALIZADO:
 
 HISTORIAL MANTENIMIENTO:
 {len(maintenance) if maintenance else 0} intervenciones registradas
+{json.dumps(maintenance[:5], indent=2) if maintenance else 'Sin registros'}
+
+ÚLTIMOS VIAJES:
+{json.dumps([{
+    'distance': t.get('distance', 0),
+    'duration': t.get('duration', 0),
+    'avg_speed': t.get('avg_speed', 0),
+    'health_score': t.get('health_score', 100)
+} for t in trips[:5]], indent=2) if trips else 'Sin viajes registrados'}
 
 INSTRUCCIONES:
-Proporciona análisis PREDICTIVO completo:
+Analiza TODOS los {len(all_pids_used)} parámetros registrados en el histórico.
 
 1. EVALUACIÓN GENERAL (0-100)
-2. COMPONENTES EN RIESGO (motor, frenos, suspensión, transmisión)
-3. PREDICCIONES 6-12 MESES (averías probables)
-4. RECOMENDACIONES ACCIONABLES (mantenimiento preventivo)
+   - Considera TODOS los parámetros disponibles
+   - Identifica tendencias en cada categoría de PIDs
+
+2. COMPONENTES EN RIESGO
+   - Basado en TODOS los datos históricos
+   - Motor, térmico, combustible, transmisión, emisiones, eléctrico
+
+3. PREDICCIONES 6-12 MESES
+   - Usa TODOS los parámetros para predecir averías
+   - Analiza patrones en datos completos
+
+4. RECOMENDACIONES ESPECÍFICAS
+   - Basadas en los {len(all_pids_used)} parámetros únicos registrados
+
 5. ESTIMACIÓN COSTES (preventivo vs correctivo)
 
 Responde SOLO con JSON válido:
@@ -1071,7 +1399,9 @@ Responde SOLO con JSON válido:
         "preventive_now": "300-500€",
         "if_delayed_6_months": "800-1500€"
     }},
-    "recommendations": ["Consejo 1", "Consejo 2"]
+    "parameters_analyzed": ["Lista de parámetros que fueron clave en el análisis"],
+    "monitoring_quality": "Excelente|Bueno|Limitado (según cantidad de PIDs disponibles)",
+    "recommendations": ["Consejo 1 basado en TODOS los datos", "Consejo 2"]
 }}"""
 
         response = model.generate_content(prompt)
@@ -1083,7 +1413,7 @@ Responde SOLO con JSON válido:
         else:
             ai_analysis = json.loads(cleaned)
 
-        # Añadir metadata
+        # Añadir metadata completa
         ai_analysis["vehicle_info"] = {
             "id": vehicle_id,
             "brand": vehicle['brand'],
@@ -1098,10 +1428,18 @@ Responde SOLO con JSON válido:
             "stats": stats
         }
 
+        # Añadir información de PIDs monitorizados
+        ai_analysis["pids_info"] = {
+            "total_available": pids_profile.get('total_pids', 0) if pids_profile else 0,
+            "protocol": pids_profile.get('protocol', 'Unknown') if pids_profile else 'Unknown',
+            "unique_pids_in_history": len(all_pids_used),
+            "pids_list": list(all_pids_used)
+        }
+
         # Guardar análisis en BD (opcional)
         # db.save_ai_analysis(vehicle_id, ai_analysis, datetime.now())
 
-        print(f"[AI-HISTORY] ✓ Análisis vehículo {vehicle_id}: Score {ai_analysis.get('overall_score', 0)}/100")
+        print(f"[AI-HISTORY] ✓ Análisis vehículo {vehicle_id}: Score {ai_analysis.get('overall_score', 0)}/100, {len(all_pids_used)} PIDs históricos")
 
         return jsonify(ai_analysis)
 

@@ -230,6 +230,24 @@
             </div>
         </div>
 
+        <!-- PARÁMETROS OBD MONITORIZADOS -->
+        <div class="card" style="margin-top: 2rem;">
+            <h2 style="margin-bottom: 1rem;">
+                <i class="fas fa-database" style="color: var(--info);"></i>
+                Parámetros OBD Monitorizados
+            </h2>
+            <p style="color: #64748b; margin-bottom: 1.5rem;">
+                PIDs disponibles detectados en este vehículo
+            </p>
+
+            <div id="vehiclePIDsInfo">
+                <div style="text-align: center; padding: 2rem; color: #64748b;">
+                    <i class="fas fa-spinner fa-spin" style="font-size: 2rem; margin-bottom: 1rem;"></i>
+                    <p>Cargando información de PIDs...</p>
+                </div>
+            </div>
+        </div>
+
         <!-- HISTORIAL DE VIAJES -->
         <div class="card" style="margin-top: 2rem;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
@@ -403,6 +421,7 @@
                         loadStatistics();
                         loadTrips();
                         loadMaintenance();
+                        loadVehiclePIDsInfo();  // Cargar información de PIDs disponibles
                     }
                 } catch (error) {
                     console.error('[VEHICLE-DETAIL] Error:', error);
@@ -637,6 +656,110 @@
                         <span style="color: #64748b; font-size: 0.85rem;">${m.mileage ? m.mileage + ' km' : ''}</span>
                     </div>
                 `).join('');
+            }
+
+            // Cargar información de PIDs disponibles
+            async function loadVehiclePIDsInfo() {
+                const container = document.getElementById('vehiclePIDsInfo');
+
+                try {
+                    const response = await fetch(`http://localhost:5000/api/vehicles/${vehicleId}/pids-profile`);
+                    const profile = await response.json();
+
+                    if (!profile || !profile.pids) {
+                        container.innerHTML = `
+                            <div style="padding: 2rem; text-align: center; background: rgba(59, 130, 246, 0.1); border-radius: 8px; border: 1px solid #3b82f6;">
+                                <i class="fas fa-info-circle" style="font-size: 2rem; color: #3b82f6; margin-bottom: 1rem;"></i>
+                                <p style="color: #1e293b; margin-bottom: 0.5rem;"><strong>No hay perfil de PIDs escaneado</strong></p>
+                                <p style="color: #64748b; font-size: 0.9rem;">Este vehículo aún no ha sido conectado con el adaptador OBD.</p>
+                                <p style="color: #64748b; font-size: 0.9rem;">Conecta el adaptador y selecciona este vehículo para escanear PIDs disponibles.</p>
+                            </div>
+                        `;
+                        return;
+                    }
+
+                    // Categorizar PIDs
+                    const categories = {
+                        motor: { name: '🔧 Motor', pids: [], keywords: ['RPM', 'ENGINE_LOAD', 'MAF', 'INTAKE_PRESSURE', 'BAROMETRIC', 'ABSOLUTE_LOAD', 'TIMING_ADVANCE'] },
+                        thermal: { name: '🌡️ Sistema Térmico', pids: [], keywords: ['TEMP', 'CATALYST_TEMP', 'EXHAUST_GAS_TEMP', 'OIL_TEMP', 'COOLANT', 'INTAKE_TEMP', 'AMBIANT'] },
+                        fuel: { name: '⛽ Combustible', pids: [], keywords: ['FUEL', 'ETHANOL', 'FUEL_TYPE', 'FUEL_LEVEL', 'FUEL_RATE', 'FUEL_INJECTION', 'FUEL_TRIM'] },
+                        transmission: { name: '⚙️ Transmisión', pids: [], keywords: ['THROTTLE', 'ACCELERATOR', 'SPEED'] },
+                        emissions: { name: '🌱 Emisiones', pids: [], keywords: ['O2', 'EGR', 'EVAP', 'DPF', 'COMMANDED_EGR', 'EVAPORATIVE', 'CATALYST', 'PURGE'] },
+                        electrical: { name: '🔌 Sistema Eléctrico', pids: [], keywords: ['VOLTAGE', 'BATTERY', 'CONTROL_MODULE'] },
+                        distances: { name: '📍 Distancias y Tiempos', pids: [], keywords: ['DISTANCE', 'RUN_TIME', 'WARMUPS', 'TIME_SINCE', 'MIL'] }
+                    };
+
+                    // Clasificar cada PID
+                    profile.pids.forEach(pid => {
+                        let categorized = false;
+                        for (const [key, category] of Object.entries(categories)) {
+                            if (category.keywords.some(keyword => pid.name.includes(keyword))) {
+                                category.pids.push(pid);
+                                categorized = true;
+                                break;
+                            }
+                        }
+                        if (!categorized) {
+                            // Si no encaja en ninguna categoría, añadir a motor por defecto
+                            categories.motor.pids.push(pid);
+                        }
+                    });
+
+                    // Generar HTML
+                    let html = `
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+                            <div style="padding: 1rem; background: rgba(16, 185, 129, 0.1); border-radius: 8px; border: 2px solid #10b981;">
+                                <div style="font-size: 2rem; font-weight: 700; color: #10b981;">${profile.total_pids}</div>
+                                <div style="color: #64748b; font-size: 0.9rem;">PIDs Disponibles</div>
+                            </div>
+                            <div style="padding: 1rem; background: rgba(59, 130, 246, 0.1); border-radius: 8px; border: 2px solid #3b82f6;">
+                                <div style="font-size: 1.2rem; font-weight: 600; color: #3b82f6;">${profile.protocol || 'Unknown'}</div>
+                                <div style="color: #64748b; font-size: 0.9rem;">Protocolo OBD</div>
+                            </div>
+                            <div style="padding: 1rem; background: rgba(168, 85, 247, 0.1); border-radius: 8px; border: 2px solid #a855f7;">
+                                <div style="font-size: 1rem; font-weight: 600; color: #a855f7;">${SENTINEL.Formatter.date(profile.scan_date)}</div>
+                                <div style="color: #64748b; font-size: 0.9rem;">Último Escaneo</div>
+                            </div>
+                        </div>
+
+                        <div style="display: grid; gap: 1.5rem;">
+                    `;
+
+                    // Mostrar cada categoría con PIDs
+                    for (const [key, category] of Object.entries(categories)) {
+                        if (category.pids.length > 0) {
+                            html += `
+                                <div style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 1rem;">
+                                    <h4 style="margin: 0 0 1rem 0; color: #1e293b;">
+                                        ${category.name}
+                                        <span style="font-size: 0.85rem; color: #64748b; font-weight: normal;">(${category.pids.length})</span>
+                                    </h4>
+                                    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 0.5rem;">
+                                        ${category.pids.map(pid => `
+                                            <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: #f8fafc; border-radius: 6px; font-size: 0.85rem;">
+                                                <i class="fas fa-check-circle" style="color: #10b981; font-size: 0.8rem;"></i>
+                                                <span style="font-weight: 600; color: #334155;">${pid.name}</span>
+                                            </div>
+                                        `).join('')}
+                                    </div>
+                                </div>
+                            `;
+                        }
+                    }
+
+                    html += `</div>`;
+
+                    container.innerHTML = html;
+
+                } catch (error) {
+                    console.error('[PIDS] Error cargando perfil:', error);
+                    container.innerHTML = `
+                        <div style="padding: 2rem; text-align: center; color: #ef4444;">
+                            <i class="fas fa-exclamation-triangle" style="font-size: 2rem; margin-bottom: 1rem;"></i>
+                            <p>Error cargando información de PIDs</p>
+                        </div>
+                    `;
+                }
             }
 
             // Event listeners
