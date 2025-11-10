@@ -99,6 +99,34 @@ function setupEventListeners() {
 
     // Parameter change for threshold hints
     document.getElementById('ruleParameter')?.addEventListener('change', updateThresholdHint);
+
+    // Cerrar modales con ESC
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            closeRuleModal();
+            closeDeleteRuleModal();
+        }
+    });
+
+    // Cerrar modal al hacer clic fuera
+    const ruleModal = document.getElementById('ruleModal');
+    const deleteModal = document.getElementById('deleteRuleModal');
+
+    if (ruleModal) {
+        ruleModal.addEventListener('click', (e) => {
+            if (e.target === ruleModal) {
+                closeRuleModal();
+            }
+        });
+    }
+
+    if (deleteModal) {
+        deleteModal.addEventListener('click', (e) => {
+            if (e.target === deleteModal) {
+                closeDeleteRuleModal();
+            }
+        });
+    }
 }
 
 // =============================================================================
@@ -502,11 +530,17 @@ function openRuleModal(ruleId = null) {
     }
 
     updateThresholdHint();
-    document.getElementById('ruleModal').classList.add('active');
+
+    // Abrir modal
+    const modal = document.getElementById('ruleModal');
+    modal.style.display = 'flex';
+    modal.classList.add('active');
 }
 
 function closeRuleModal() {
-    document.getElementById('ruleModal').classList.remove('active');
+    const modal = document.getElementById('ruleModal');
+    modal.style.display = 'none';
+    modal.classList.remove('active');
     editingRuleId = null;
 }
 
@@ -560,12 +594,25 @@ function editRule(ruleId) {
 
 function deleteRule(ruleId, ruleName) {
     editingRuleId = ruleId;
+
+    // Actualizar mensaje con nombre de la regla
+    const modal = document.getElementById('deleteRuleModal');
+    const message = modal.querySelector('.confirm-message');
+    if (message && ruleName) {
+        message.textContent = `¿Estás seguro de que deseas eliminar la regla "${ruleName}"?`;
+    }
+
     document.getElementById('deleteRuleName').textContent = ruleName;
-    document.getElementById('deleteRuleModal').classList.add('active');
+
+    // Abrir modal
+    modal.style.display = 'flex';
+    modal.classList.add('active');
 }
 
 function closeDeleteRuleModal() {
-    document.getElementById('deleteRuleModal').classList.remove('active');
+    const modal = document.getElementById('deleteRuleModal');
+    modal.style.display = 'none';
+    modal.classList.remove('active');
     editingRuleId = null;
 }
 
@@ -801,7 +848,21 @@ function formatDate(timestamp) {
 }
 
 function showToast(message, type = 'info') {
-    // Create toast element
+    // Usar SENTINEL.Toast si está disponible, sino implementación propia
+    if (window.SENTINEL && window.SENTINEL.Toast) {
+        if (type === 'success') {
+            window.SENTINEL.Toast.success(message);
+        } else if (type === 'error') {
+            window.SENTINEL.Toast.error(message);
+        } else if (type === 'warning') {
+            window.SENTINEL.Toast.warning(message);
+        } else {
+            window.SENTINEL.Toast.info(message);
+        }
+        return;
+    }
+
+    // Fallback: implementación propia
     const toast = document.createElement('div');
     toast.className = `toast toast-${type}`;
     toast.textContent = message;
