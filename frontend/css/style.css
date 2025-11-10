@@ -1337,3 +1337,158 @@ footer p {
         font-size: 0.7rem;
     }
 }
+
+/* =============================================================================
+   SELECTOR DE MODO DE TRABAJO
+   ============================================================================= */
+
+.mode-selector {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin: 1.5rem 0;
+}
+
+.mode-btn {
+    background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+    border: 2px solid #334155;
+    border-radius: 12px;
+    padding: 1.5rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.75rem;
+    text-align: center;
+}
+
+.mode-btn:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 16px rgba(59, 130, 246, 0.2);
+    border-color: #3b82f6;
+}
+
+.mode-btn.active {
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    border-color: #3b82f6;
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+.mode-btn i {
+    font-size: 2.5rem;
+    color: #94a3b8;
+}
+
+.mode-btn.active i {
+    color: #ffffff;
+}
+
+.mode-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #cbd5e1;
+}
+
+.mode-btn.active .mode-title {
+    color: #ffffff;
+}
+
+.mode-desc {
+    font-size: 0.85rem;
+    color: #64748b;
+}
+
+.mode-btn.active .mode-desc {
+    color: #e0e7ff;
+}
+
+.vehicle-selector-container {
+    margin-top: 1.5rem;
+    padding: 1.5rem;
+    background: rgba(59, 130, 246, 0.05);
+    border-radius: 8px;
+    border: 1px solid rgba(59, 130, 246, 0.2);
+}
+
+.vehicle-selector-container label {
+    display: block;
+    margin-bottom: 0.75rem;
+    font-weight: 600;
+    color: #1e293b;
+}
+
+.info-message {
+    margin-top: 1.5rem;
+    padding: 1rem 1.5rem;
+    background: rgba(59, 130, 246, 0.1);
+    border-left: 4px solid #3b82f6;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.info-message i {
+    font-size: 1.5rem;
+    color: #3b82f6;
+}
+
+.info-message p {
+    margin: 0;
+    color: #475569;
+}
+
+.csv-import-container {
+    margin-top: 1.5rem;
+}
+
+.info-text {
+    padding: 1rem;
+    background: rgba(251, 191, 36, 0.1);
+    border-left: 4px solid #fbbf24;
+    border-radius: 4px;
+    color: #92400e;
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.upload-zone {
+    border: 3px dashed #cbd5e1;
+    border-radius: 12px;
+    padding: 3rem;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    background: rgba(241, 245, 249, 0.5);
+}
+
+.upload-zone:hover {
+    border-color: #3b82f6;
+    background: rgba(59, 130, 246, 0.05);
+}
+
+.upload-zone.dragover {
+    border-color: #3b82f6;
+    background: rgba(59, 130, 246, 0.1);
+    transform: scale(1.02);
+}
+
+.upload-zone i {
+    font-size: 3rem;
+    color: #64748b;
+    display: block;
+    margin-bottom: 1rem;
+}
+
+.upload-zone p {
+    color: #475569;
+    margin: 0.5rem 0;
+}
+
+.small-text {
+    font-size: 0.85rem;
+    color: #64748b;
+}

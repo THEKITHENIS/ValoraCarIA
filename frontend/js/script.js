@@ -76,7 +76,209 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentTripId = null;
     let tripDataBuffer = []; // Buffer para acumular datos antes de enviar a BD
     const TRIP_DATA_BATCH_SIZE = 10; // Enviar cada 10 puntos de datos
-    
+
+    // Estado global del modo de trabajo
+    let workMode = 'fleet'; // fleet | new | import
+    let selectedFleetVehicle = null;
+
+    // === SELECTOR DE MODO DE TRABAJO ===
+
+    function initModeSelector() {
+        const modeButtons = document.querySelectorAll('.mode-btn');
+        const fleetSelector = document.getElementById('fleetVehicleSelector');
+        const newMessage = document.getElementById('newVehicleMessage');
+        const importSection = document.getElementById('csvImportSection');
+        const configCard = document.getElementById('vehicleConfigCard');
+
+        if (!modeButtons || modeButtons.length === 0) return; // No hay selector de modo
+
+        modeButtons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                // Actualizar botones activos
+                modeButtons.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+
+                // Cambiar modo
+                workMode = btn.dataset.mode;
+
+                // Mostrar/ocultar secciones
+                if (fleetSelector) fleetSelector.style.display = workMode === 'fleet' ? 'block' : 'none';
+                if (newMessage) newMessage.style.display = workMode === 'new' ? 'block' : 'none';
+                if (importSection) importSection.style.display = workMode === 'import' ? 'block' : 'none';
+
+                // Configurar formulario según modo
+                if (workMode === 'fleet') {
+                    loadFleetVehicles();
+                    disableVehicleForm();
+                } else if (workMode === 'new') {
+                    clearVehicleForm();
+                    enableVehicleForm();
+                } else if (workMode === 'import') {
+                    clearVehicleForm();
+                    enableVehicleForm();
+                }
+            });
+        });
+
+        // Cargar vehículo de flota
+        const loadFleetVehicleBtn = document.getElementById('loadFleetVehicle');
+        if (loadFleetVehicleBtn) {
+            loadFleetVehicleBtn.addEventListener('click', async () => {
+                const vehicleId = document.getElementById('fleetVehicleSelect').value;
+                if (vehicleId) {
+                    await loadVehicleData(vehicleId);
+                }
+            });
+        }
+
+        // Drag & drop para CSV
+        const dropZone = document.getElementById('csvDropZone');
+        const fileInput = document.getElementById('csvImportInput');
+
+        if (dropZone && fileInput) {
+            dropZone.addEventListener('click', () => fileInput.click());
+
+            dropZone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                dropZone.classList.add('dragover');
+            });
+
+            dropZone.addEventListener('dragleave', () => {
+                dropZone.classList.remove('dragover');
+            });
+
+            dropZone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                dropZone.classList.remove('dragover');
+                handleCSVFiles(e.dataTransfer.files);
+            });
+
+            fileInput.addEventListener('change', (e) => {
+                handleCSVFiles(e.target.files);
+            });
+        }
+
+        // Botón proceder a importación
+        const proceedBtn = document.getElementById('proceedToImport');
+        if (proceedBtn) {
+            proceedBtn.addEventListener('click', () => {
+                window.location.href = 'import.html';
+            });
+        }
+
+        // Iniciar en modo fleet por defecto
+        loadFleetVehicles();
+    }
+
+    // Cargar vehículos de la flota
+    async function loadFleetVehicles() {
+        try {
+            const response = await fetch(`${API_URL}/api/vehicles`);
+            const data = await response.json();
+
+            const vehicles = data.vehicles || data;
+            const select = document.getElementById('fleetVehicleSelect');
+
+            if (!select) return;
+
+            select.innerHTML = '<option value="">Selecciona un vehículo...</option>';
+
+            if (vehicles && vehicles.length > 0) {
+                vehicles.forEach(vehicle => {
+                    const option = document.createElement('option');
+                    option.value = vehicle.id;
+                    option.textContent = `${vehicle.brand} ${vehicle.model} (${vehicle.year})${vehicle.vin ? ' - ' + vehicle.vin : ''}`;
+                    select.appendChild(option);
+                });
+            } else {
+                select.innerHTML = '<option value="">No hay vehículos en la flota</option>';
+            }
+        } catch (error) {
+            console.error('Error cargando vehículos:', error);
+            if (window.SENTINEL && window.SENTINEL.Toast) {
+                window.SENTINEL.Toast.error('Error al cargar la flota');
+            }
+        }
+    }
+
+    // Cargar datos del vehículo seleccionado
+    async function loadVehicleData(vehicleId) {
+        try {
+            const response = await fetch(`${API_URL}/api/vehicles/${vehicleId}`);
+            const data = await response.json();
+            const vehicle = data.vehicle || data;
+
+            // Rellenar formulario
+            if (vehicleBrand) vehicleBrand.value = vehicle.brand || '';
+            if (vehicleModel) vehicleModel.value = vehicle.model || '';
+            if (vehicleYear) vehicleYear.value = vehicle.year || '';
+            if (vehicleMileage) vehicleMileage.value = vehicle.mileage || '';
+            if (vehicleTransmission) vehicleTransmission.value = vehicle.transmission || 'manual';
+            if (vehicleType) vehicleType.value = vehicle.fuel_type || 'gasolina';
+
+            selectedFleetVehicle = vehicle;
+
+            // Guardar en localStorage
+            localStorage.setItem('activeVehicleId', vehicleId);
+            saveVehicleInfo();
+
+            if (window.SENTINEL && window.SENTINEL.Toast) {
+                window.SENTINEL.Toast.success('Vehículo cargado correctamente');
+            }
+        } catch (error) {
+            console.error('Error cargando vehículo:', error);
+            if (window.SENTINEL && window.SENTINEL.Toast) {
+                window.SENTINEL.Toast.error('Error al cargar el vehículo');
+            }
+        }
+    }
+
+    // Deshabilitar formulario
+    function disableVehicleForm() {
+        const fields = [vehicleBrand, vehicleModel, vehicleYear, vehicleMileage, vehicleTransmission, vehicleType];
+        fields.forEach(field => {
+            if (field) field.disabled = true;
+        });
+    }
+
+    // Habilitar formulario
+    function enableVehicleForm() {
+        const fields = [vehicleBrand, vehicleModel, vehicleYear, vehicleMileage, vehicleTransmission, vehicleType];
+        fields.forEach(field => {
+            if (field) field.disabled = false;
+        });
+    }
+
+    // Limpiar formulario
+    function clearVehicleForm() {
+        const fields = [vehicleBrand, vehicleModel, vehicleYear, vehicleMileage, vehicleTransmission, vehicleType];
+        fields.forEach(field => {
+            if (field) field.value = '';
+        });
+        selectedFleetVehicle = null;
+    }
+
+    // Manejar archivos CSV
+    function handleCSVFiles(files) {
+        if (files.length > 0) {
+            const fileList = Array.from(files).map(f => f.name).join(', ');
+            const dropZone = document.getElementById('csvDropZone');
+            if (dropZone) {
+                dropZone.innerHTML = `
+                    <i class="fas fa-file-csv" style="color: #10b981;"></i>
+                    <p style="color: #10b981;">${files.length} archivo(s) seleccionado(s)</p>
+                    <p class="small-text">${fileList}</p>
+                `;
+            }
+            const proceedBtn = document.getElementById('proceedToImport');
+            if (proceedBtn) proceedBtn.style.display = 'block';
+
+            // Guardar archivos en sessionStorage para usar en import.html
+            const fileNames = Array.from(files).map(f => f.name);
+            sessionStorage.setItem('pendingCSVImport', JSON.stringify(fileNames));
+        }
+    }
+
     // === FUNCIONES DE ALMACENAMIENTO ===
     
     function saveVehicleInfo() {
@@ -1159,13 +1361,14 @@ document.addEventListener('DOMContentLoaded', () => {
     valuationBtn.addEventListener('click', getValuation);
     
     // === INICIALIZACIÓN ===
-    
+
     console.log('[INIT] SENTINEL PRO v9.0 iniciado');
     console.log('[INIT] Optimizaciones:');
     console.log('  ✓ Datos críticos cada 3s: RPM, velocidad, acelerador, carga, MAF');
     console.log('  ✓ Datos térmicos cada 60s: temperaturas');
     console.log('  ✓ Análisis salud automático cada 90s');
-    
+
+    initModeSelector();
     loadVehicleInfo();
     loadMaintenanceLog();
     updateAnalyzeButton();
