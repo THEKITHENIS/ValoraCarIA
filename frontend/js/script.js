@@ -993,7 +993,7 @@ document.addEventListener('DOMContentLoaded', () => {
     /**
      * Confirmar selección de vehículo
      */
-    function confirmVehicleSelection() {
+    async function confirmVehicleSelection() {
         const selectedOption = tripVehicleSelect.options[tripVehicleSelect.selectedIndex];
 
         if (!selectedOption || !selectedOption.value) {
@@ -1023,6 +1023,9 @@ document.addEventListener('DOMContentLoaded', () => {
         updateConnectionStatus('connected');
 
         SENTINEL.Toast.success(`Vehículo ${vehicleName} seleccionado`);
+
+        // ESCANEO AUTOMÁTICO DE PIDs DISPONIBLES
+        await scanAvailablePIDs(activeVehicleId, vehicleName);
     }
 
     /**
@@ -1356,6 +1359,198 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) {
             console.error('[TRIP] Error saving OBD data batch:', error);
         }
+    }
+
+    /**
+     * Escanear PIDs disponibles del vehículo conectado
+     */
+    async function scanAvailablePIDs(vehicleId, vehicleName) {
+        try {
+            SENTINEL.Toast.info('🔍 Escaneando PIDs disponibles... (30-60 segundos)');
+
+            const response = await fetch(`${API_URL}/api/obd/scan-available-pids`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ vehicle_id: vehicleId })
+            });
+
+            if (!response.ok) {
+                throw new Error('Error en escaneo de PIDs');
+            }
+
+            const scanResult = await response.json();
+
+            // Guardar PIDs disponibles globalmente
+            window.availablePIDs = scanResult.available_pids;
+            window.vehiclePIDsProfile = scanResult.profile;
+
+            // Guardar en localStorage
+            localStorage.setItem('availablePIDs', JSON.stringify(scanResult.available_pids));
+            localStorage.setItem('vehiclePIDsProfile', JSON.stringify(scanResult.profile));
+
+            // Mostrar resultado
+            SENTINEL.Toast.success(`✅ ${scanResult.total_pids} PIDs disponibles detectados`);
+
+            // Mostrar modal con detalles
+            showPIDsScanModal(scanResult, vehicleName);
+
+        } catch (error) {
+            console.error('[PIDS] Error escaneando PIDs:', error);
+            SENTINEL.Toast.warning('No se pudo escanear PIDs. Usando valores por defecto.');
+        }
+    }
+
+    /**
+     * Mostrar modal con resultados del escaneo de PIDs
+     */
+    function showPIDsScanModal(scanResult, vehicleName) {
+        // Crear overlay de modal
+        const modal = document.createElement('div');
+        modal.className = 'modal-overlay';
+        modal.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+            backdrop-filter: blur(4px);
+            animation: fadeIn 0.3s ease;
+        `;
+
+        // Crear contenido del modal
+        const modalContent = document.createElement('div');
+        modalContent.className = 'modal-content';
+        modalContent.style.cssText = `
+            background: var(--bg-card);
+            border-radius: 16px;
+            width: 90%;
+            max-width: 700px;
+            max-height: 85vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+            border: 1px solid var(--border);
+            animation: slideUp 0.3s ease;
+        `;
+
+        // HTML del modal
+        modalContent.innerHTML = `
+            <div style="padding: 2rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+                    <h2 style="margin: 0; display: flex; align-items: center; gap: 0.5rem;">
+                        <i class="fas fa-check-circle" style="color: #10b981;"></i>
+                        Escaneo Completado
+                    </h2>
+                    <button class="modal-close" style="
+                        background: transparent;
+                        border: none;
+                        font-size: 1.5rem;
+                        cursor: pointer;
+                        color: var(--text-secondary);
+                        padding: 0.5rem;
+                        width: 40px;
+                        height: 40px;
+                        border-radius: 8px;
+                        transition: all 0.2s;
+                    ">&times;</button>
+                </div>
+
+                <div style="margin-bottom: 2rem;">
+                    <div style="
+                        display: flex;
+                        align-items: center;
+                        gap: 1.5rem;
+                        padding: 1.5rem 2rem;
+                        background: rgba(16, 185, 129, 0.1);
+                        border-radius: 12px;
+                        border: 2px solid #10b981;
+                    ">
+                        <i class="fas fa-database" style="font-size: 3rem; color: #10b981;"></i>
+                        <div>
+                            <div style="font-size: 2.5rem; font-weight: 700; color: #10b981;">${scanResult.total_pids}</div>
+                            <div style="color: var(--text-secondary); font-size: 0.95rem;">PIDs Disponibles</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="margin-bottom: 1.5rem;">
+                    <h3 style="margin-bottom: 1rem;">
+                        <i class="fas fa-car"></i>
+                        ${vehicleName}
+                    </h3>
+                    <div style="font-size: 0.9rem; color: var(--text-secondary);">
+                        <i class="fas fa-network-wired"></i> Protocolo: ${scanResult.profile.protocol}
+                    </div>
+                </div>
+
+                <h3 style="margin-bottom: 1rem;">PIDs Detectados:</h3>
+                <div style="
+                    display: grid;
+                    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+                    gap: 0.5rem;
+                    max-height: 350px;
+                    overflow-y: auto;
+                    padding: 1rem;
+                    background: rgba(15, 23, 42, 0.5);
+                    border-radius: 8px;
+                ">
+                    ${scanResult.pids_data.map(pid => `
+                        <div style="
+                            display: flex;
+                            align-items: center;
+                            gap: 0.5rem;
+                            padding: 0.5rem;
+                            background: rgba(30, 41, 59, 0.8);
+                            border-radius: 6px;
+                            font-size: 0.85rem;
+                        ">
+                            <i class="fas fa-check-circle" style="color: #10b981; font-size: 0.9rem;"></i>
+                            <span style="font-weight: 600; color: var(--text-primary);">${pid.name}</span>
+                            <span style="margin-left: auto; color: var(--text-secondary); font-size: 0.75rem;">
+                                ${pid.sample_value} ${pid.unit}
+                            </span>
+                        </div>
+                    `).join('')}
+                </div>
+
+                <div style="
+                    margin-top: 1.5rem;
+                    padding: 1rem;
+                    background: rgba(59, 130, 246, 0.1);
+                    border-left: 3px solid #3b82f6;
+                    border-radius: 6px;
+                ">
+                    <i class="fas fa-info-circle" style="color: #3b82f6;"></i>
+                    <span style="color: var(--text-primary); font-size: 0.9rem;">
+                        SENTINEL PRO utilizará estos <strong>${scanResult.total_pids} PIDs</strong> para monitoreo en tiempo real y análisis IA predictivo.
+                    </span>
+                </div>
+
+                <button class="btn btn-primary btn-large" style="
+                    width: 100%;
+                    margin-top: 1.5rem;
+                    padding: 1rem;
+                    font-size: 1rem;
+                ">
+                    <i class="fas fa-check"></i>
+                    Continuar
+                </button>
+            </div>
+        `;
+
+        modal.appendChild(modalContent);
+        document.body.appendChild(modal);
+
+        // Event listeners para cerrar
+        modal.querySelector('.modal-close').addEventListener('click', () => modal.remove());
+        modal.querySelector('.btn-primary').addEventListener('click', () => modal.remove());
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) modal.remove();
+        });
     }
 
     /**

@@ -63,6 +63,36 @@ vehicle_health = {
     "last_update": None
 }
 
+# === DETECCIÓN DINÁMICA DE PIDs ===
+# Lista completa de PIDs a intentar leer (basada en especificación OBD-II completa)
+ALL_POSSIBLE_PIDS = [
+    'RPM', 'SPEED', 'THROTTLE_POS', 'ENGINE_LOAD', 'COOLANT_TEMP',
+    'INTAKE_TEMP', 'MAF', 'INTAKE_PRESSURE', 'BAROMETRIC_PRESSURE',
+    'TIMING_ADVANCE', 'FUEL_PRESSURE', 'FUEL_RAIL_PRESSURE_VAC',
+    'FUEL_RAIL_PRESSURE_DIRECT', 'FUEL_RAIL_PRESSURE_ABS', 'COMMANDED_EGR',
+    'EGR_ERROR', 'EVAPORATIVE_PURGE', 'FUEL_LEVEL', 'DISTANCE_W_MIL',
+    'COMMANDED_EQUIV_RATIO', 'RELATIVE_THROTTLE_POS', 'AMBIANT_AIR_TEMP',
+    'ABSOLUTE_THROTTLE_POS_B', 'ABSOLUTE_THROTTLE_POS_C', 'ACCELERATOR_POS_D',
+    'ACCELERATOR_POS_E', 'ACCELERATOR_POS_F', 'COMMANDED_THROTTLE_ACTUATOR',
+    'RUN_TIME', 'DISTANCE_SINCE_DTC_CLEAR', 'EVAP_VAPOR_PRESSURE',
+    'CATALYST_TEMP_B1S1', 'CATALYST_TEMP_B2S1', 'CATALYST_TEMP_B1S2',
+    'CATALYST_TEMP_B2S2', 'CONTROL_MODULE_VOLTAGE', 'ABSOLUTE_LOAD',
+    'TIME_SINCE_DTC_CLEAR', 'FUEL_TYPE', 'ETHANOL_PERCENT',
+    'EVAP_VAPOR_PRESSURE_ABS', 'EVAP_VAPOR_PRESSURE_ALT', 'SHORT_O2_TRIM_B1',
+    'LONG_O2_TRIM_B1', 'SHORT_O2_TRIM_B2', 'LONG_O2_TRIM_B2',
+    'RELATIVE_ACCEL_POS', 'HYBRID_BATTERY_REMAINING', 'OIL_TEMP',
+    'FUEL_INJECTION_TIMING', 'FUEL_RATE', 'EXHAUST_GAS_TEMP_B1S1',
+    'EXHAUST_GAS_TEMP_B1S2', 'EXHAUST_GAS_TEMP_B2S1', 'EXHAUST_GAS_TEMP_B2S2',
+    'DPF_TEMPERATURE', 'DPF_PRESSURE', 'SHORT_FUEL_TRIM_1', 'LONG_FUEL_TRIM_1',
+    'SHORT_FUEL_TRIM_2', 'LONG_FUEL_TRIM_2', 'O2_B1S1', 'O2_B1S2',
+    'O2_B1S3', 'O2_B1S4', 'O2_B2S1', 'O2_B2S2', 'O2_B2S3', 'O2_B2S4',
+    'WARMUPS_SINCE_DTC_CLEAR', 'RUN_TIME_MIL'
+]
+
+# Variables para PIDs disponibles del vehículo actual
+available_pids = []
+current_vehicle_pids_profile = {}
+
 # Inicialización Gemini
 model = None
 try:
@@ -469,6 +499,193 @@ def get_obd_health():
             "error": str(e),
             "timestamp": datetime.now().isoformat()
         }), 200  # Retornar 200 aunque haya error para que el frontend sepa que el servidor está vivo
+
+@app.route('/api/obd/scan-available-pids', methods=['POST'])
+def scan_available_pids():
+    """
+    Escanea QUÉ PIDs están disponibles en el vehículo conectado
+    Usa el método de 3 reintentos para máxima fiabilidad
+    """
+    global available_pids, current_vehicle_pids_profile
+
+    if not connection or not connection.is_connected():
+        return jsonify({'error': 'OBD no conectado'}), 400
+
+    data = request.json
+    vehicle_id = data.get('vehicle_id')
+
+    print(f"\n🔍 Escaneando PIDs disponibles para vehículo {vehicle_id}...")
+    print(f"   Probando {len(ALL_POSSIBLE_PIDS)} PIDs posibles...")
+
+    available_pids = []
+    pids_data = []
+
+    # Probar cada PID con el método de 3 reintentos
+    for idx, pid_name in enumerate(ALL_POSSIBLE_PIDS):
+        if not hasattr(obd.commands, pid_name):
+            continue
+
+        try:
+            cmd = getattr(obd.commands, pid_name)
+            valor_final = None
+            unidad = ''
+
+            # 3 INTENTOS (método robusto)
+            for intento in range(3):
+                try:
+                    response = connection.query(cmd)
+
+                    if response and response.value is not None and not response.is_null():
+                        valor = response.value
+
+                        if hasattr(valor, 'magnitude'):
+                            valor_final = valor.magnitude
+                            unidad = str(response.unit) if hasattr(response, 'unit') else ''
+                        else:
+                            valor_final = valor
+                            unidad = ''
+
+                        break
+
+                except:
+                    pass
+
+                time.sleep(0.05)
+
+            # Si obtuvo valor después de 3 intentos
+            if valor_final is not None:
+                pid_info = {
+                    'name': pid_name,
+                    'command': str(cmd.command) if hasattr(cmd, 'command') else 'N/A',
+                    'description': cmd.desc if hasattr(cmd, 'desc') else '',
+                    'unit': unidad,
+                    'sample_value': float(valor_final) if isinstance(valor_final, (int, float)) else str(valor_final)
+                }
+                available_pids.append(pid_name)
+                pids_data.append(pid_info)
+                print(f"  ✅ {pid_name}: {valor_final} {unidad}")
+
+        except Exception as e:
+            # Error silencioso para no spam en consola
+            pass
+
+        # Pequeña pausa para no saturar el adaptador
+        time.sleep(0.03)
+
+        # Progreso cada 10 PIDs
+        if (idx + 1) % 10 == 0:
+            print(f"   Progreso: {idx + 1}/{len(ALL_POSSIBLE_PIDS)} PIDs probados...")
+
+    # Obtener protocolo del vehículo
+    protocol = "Unknown"
+    try:
+        if hasattr(connection, 'protocol_name'):
+            protocol = connection.protocol_name()
+        elif hasattr(connection, 'protocol'):
+            protocol = str(connection.protocol)
+    except:
+        pass
+
+    # Guardar perfil de PIDs para este vehículo
+    current_vehicle_pids_profile = {
+        'vehicle_id': vehicle_id,
+        'scan_date': datetime.now().isoformat(),
+        'total_pids': len(available_pids),
+        'pids': pids_data,
+        'protocol': protocol
+    }
+
+    # Guardar en base de datos
+    try:
+        db = get_db()
+        if db:
+            db.save_vehicle_pids_profile(vehicle_id, current_vehicle_pids_profile)
+    except Exception as e:
+        print(f"[SCAN] Advertencia: No se pudo guardar perfil en BD: {e}")
+
+    print(f"\n✅ Escaneo completado: {len(available_pids)} PIDs disponibles")
+    print(f"   Protocolo: {protocol}")
+
+    return jsonify({
+        'success': True,
+        'total_pids': len(available_pids),
+        'available_pids': available_pids,
+        'pids_data': pids_data,
+        'profile': current_vehicle_pids_profile
+    })
+
+@app.route('/api/obd/live-data-dynamic', methods=['GET'])
+def get_live_data_dynamic():
+    """
+    Lee TODOS los PIDs disponibles dinámicamente
+    Si no se escaneó antes, usa lista básica
+    """
+    if not connection or not connection.is_connected():
+        return jsonify({'error': 'OBD no conectado'}), 400
+
+    # Usar PIDs disponibles o lista básica
+    pids_to_read = available_pids if available_pids else [
+        'RPM', 'SPEED', 'ENGINE_LOAD', 'THROTTLE_POS', 'COOLANT_TEMP',
+        'INTAKE_TEMP', 'MAF', 'INTAKE_PRESSURE'
+    ]
+
+    data = {}
+
+    for pid_name in pids_to_read:
+        if not hasattr(obd.commands, pid_name):
+            continue
+
+        try:
+            cmd = getattr(obd.commands, pid_name)
+
+            # 2 reintentos (más rápido para live data)
+            for intento in range(2):
+                try:
+                    response = connection.query(cmd)
+
+                    if response and response.value is not None and not response.is_null():
+                        valor = response.value
+
+                        if hasattr(valor, 'magnitude'):
+                            data[pid_name.lower()] = valor.magnitude
+                        else:
+                            data[pid_name.lower()] = valor
+
+                        break
+
+                except:
+                    pass
+
+                time.sleep(0.02)
+
+        except:
+            pass
+
+    # Añadir timestamp
+    data['timestamp'] = datetime.now().isoformat()
+
+    return jsonify(data)
+
+@app.route('/api/vehicles/<int:vehicle_id>/pids-profile', methods=['GET'])
+def get_vehicle_pids_profile_endpoint(vehicle_id):
+    """
+    Obtiene el perfil de PIDs más reciente de un vehículo
+    """
+    try:
+        db = get_db()
+        if not db:
+            return jsonify({'error': 'Base de datos no disponible'}), 500
+
+        profile = db.get_vehicle_pids_profile(vehicle_id)
+
+        if not profile:
+            return jsonify(None), 200  # Retornar null si no hay perfil
+
+        return jsonify(profile)
+
+    except Exception as e:
+        print(f"[API] Error obteniendo perfil de PIDs: {e}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route("/predictive_analysis", methods=["POST"])
 def predictive_analysis():

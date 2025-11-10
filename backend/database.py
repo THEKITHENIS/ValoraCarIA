@@ -182,6 +182,19 @@ class DatabaseManager:
                 )
             ''')
 
+            # Tabla de perfiles de PIDs por vehículo
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS vehicle_pids_profiles (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    vehicle_id INTEGER NOT NULL,
+                    scan_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    total_pids INTEGER NOT NULL,
+                    pids_data TEXT NOT NULL,
+                    protocol TEXT,
+                    FOREIGN KEY (vehicle_id) REFERENCES vehicles(id)
+                )
+            ''')
+
             # Índices para mejorar performance
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_trips_vehicle ON trips(vehicle_id)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_trips_start ON trips(start_time)')
@@ -194,6 +207,8 @@ class DatabaseManager:
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_alert_rules_enabled ON alert_rules(enabled)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_imports_vehicle ON imports(vehicle_id)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_imports_hash ON imports(file_hash)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_pids_profiles_vehicle ON vehicle_pids_profiles(vehicle_id)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_pids_profiles_date ON vehicle_pids_profiles(scan_date)')
 
             conn.commit()
             print("[DB] ✓ Base de datos inicializada correctamente")
@@ -1171,6 +1186,130 @@ class DatabaseManager:
             True si se actualizó correctamente
         """
         return self.update_alert_rule(rule_id, enabled=1 if enabled else 0)
+
+    # =========================================================================
+    # GESTIÓN DE PERFILES DE PIDs
+    # =========================================================================
+
+    def save_vehicle_pids_profile(self, vehicle_id: int, profile_data: dict) -> int:
+        """
+        Guarda el perfil de PIDs disponibles de un vehículo
+
+        Args:
+            vehicle_id: ID del vehículo
+            profile_data: Diccionario con información del perfil:
+                - total_pids: Número total de PIDs disponibles
+                - pids: Lista de PIDs con sus datos
+                - protocol: Protocolo OBD del vehículo
+                - scan_date: Fecha del escaneo
+
+        Returns:
+            ID del perfil creado
+        """
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        try:
+            cursor.execute('''
+                INSERT INTO vehicle_pids_profiles (vehicle_id, total_pids, pids_data, protocol)
+                VALUES (?, ?, ?, ?)
+            ''', (
+                vehicle_id,
+                profile_data.get('total_pids', 0),
+                json.dumps(profile_data),
+                profile_data.get('protocol', 'Unknown')
+            ))
+
+            conn.commit()
+            profile_id = cursor.lastrowid
+
+            print(f"[DB] ✓ Perfil de PIDs guardado para vehículo {vehicle_id}: {profile_data.get('total_pids', 0)} PIDs")
+
+            return profile_id
+
+        except Exception as e:
+            conn.rollback()
+            print(f"[DB] ✗ Error guardando perfil de PIDs: {e}")
+            raise
+        finally:
+            conn.close()
+
+    def get_vehicle_pids_profile(self, vehicle_id: int) -> Optional[dict]:
+        """
+        Obtiene el perfil de PIDs más reciente de un vehículo
+
+        Args:
+            vehicle_id: ID del vehículo
+
+        Returns:
+            Diccionario con el perfil de PIDs o None si no existe
+        """
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        try:
+            cursor.execute('''
+                SELECT pids_data, scan_date, total_pids, protocol
+                FROM vehicle_pids_profiles
+                WHERE vehicle_id = ?
+                ORDER BY scan_date DESC
+                LIMIT 1
+            ''', (vehicle_id,))
+
+            row = cursor.fetchone()
+
+            if row:
+                profile = json.loads(row[0])
+                profile['scan_date'] = row[1]
+                profile['total_pids'] = row[2]
+                profile['protocol'] = row[3]
+                return profile
+
+            return None
+
+        except Exception as e:
+            print(f"[DB] ✗ Error obteniendo perfil de PIDs: {e}")
+            return None
+        finally:
+            conn.close()
+
+    def get_all_pids_profiles(self, vehicle_id: int) -> List[dict]:
+        """
+        Obtiene todos los perfiles de PIDs históricos de un vehículo
+
+        Args:
+            vehicle_id: ID del vehículo
+
+        Returns:
+            Lista de perfiles ordenados por fecha (más reciente primero)
+        """
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        try:
+            cursor.execute('''
+                SELECT id, scan_date, total_pids, protocol
+                FROM vehicle_pids_profiles
+                WHERE vehicle_id = ?
+                ORDER BY scan_date DESC
+            ''', (vehicle_id,))
+
+            profiles = []
+            for row in cursor.fetchall():
+                profiles.append({
+                    'id': row[0],
+                    'scan_date': row[1],
+                    'total_pids': row[2],
+                    'protocol': row[3]
+                })
+
+            return profiles
+
+        except Exception as e:
+            print(f"[DB] ✗ Error obteniendo perfiles de PIDs: {e}")
+            return []
+        finally:
+            conn.close()
 
 
 # Inicialización global
