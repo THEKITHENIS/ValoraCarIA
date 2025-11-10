@@ -3,6 +3,24 @@
 ## ESTADO DE IMPLEMENTACIÓN
 
 ### ✅ FASE 1: UNIFORMIZACIÓN CSS Y VARIABLES GLOBALES (COMPLETADA)
+**Commit:** `03a0f5a`
+
+### 🔄 FASE 2: BACKEND IA + DASHBOARD OPTIMIZADO (PARCIAL - 70% COMPLETADA)
+**Commit:** `a8946d6`
+
+**✅ Implementado:**
+- Backend: 2 endpoints IA completos (`/api/ai/analyze-current-trip`, `/api/ai/analyze-vehicle-history`)
+- Dashboard HTML: Indicador estado OBD, botón "Analizar Viaje Actual"
+- Documentación: `FASE_2_PENDIENTE.md` con código JavaScript listo
+
+**🔄 Pendiente:**
+- JavaScript en `script.js`: Tracking de viaje, habilitar botón tras 5 min
+- Fleet: Botón "Análisis IA" en tarjetas
+- Fleet: Modal de análisis predictivo
+
+### ⏳ FASE 3: ANALYTICS + VEHICLE-DETAIL (NO INICIADA)
+
+### ✅ FASE 1: UNIFORMIZACIÓN CSS Y VARIABLES GLOBALES (COMPLETADA)
 
 **Implementado:**
 - Variables CSS globales en `frontend/css/style.css`
