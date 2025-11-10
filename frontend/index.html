@@ -10,11 +10,19 @@
 <body>
     <!-- HEADER -->
     <header>
-        <h1>
-            <i class="fas fa-shield-halved"></i>
-            SENTINEL PRO
-        </h1>
-        <p>Sistema Inteligente de Mantenimiento Predictivo Vehicular</p>
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+            <div>
+                <h1>
+                    <i class="fas fa-shield-halved"></i>
+                    SENTINEL PRO
+                </h1>
+                <p>Sistema Inteligente de Mantenimiento Predictivo Vehicular</p>
+            </div>
+            <div id="obdStatusIndicator" class="status-indicator">
+                <i class="fas fa-circle"></i>
+                <span>Desconectado</span>
+            </div>
+        </div>
     </header>
 
     <!-- NAVBAR DE NAVEGACIÓN -->
@@ -278,9 +286,9 @@
             </div>
 
             <div style="display: flex; gap: 1rem; margin-top: 1.5rem; flex-wrap: wrap;">
-                <button id="analyzeTripBtn" class="btn btn-primary">
+                <button id="analyzeTripBtn" class="btn btn-ai btn-large" disabled>
                     <i class="fas fa-brain"></i>
-                    Análisis Predictivo con IA
+                    Analizar Viaje Actual
                 </button>
                 <button id="downloadReportBtn" class="btn btn-primary">
                     <i class="fas fa-file-pdf"></i>
@@ -291,13 +299,16 @@
                     Descargar CSV
                 </button>
             </div>
+            <small class="text-muted" style="display: block; margin-top: 0.5rem; color: #64748b;">
+                <i class="fas fa-info-circle"></i> El análisis del viaje estará disponible después de 5 minutos de conducción
+            </small>
         </div>
 
-        <!-- SECCIÓN 4: RESULTADOS DEL ANÁLISIS PREDICTIVO -->
+        <!-- SECCIÓN 4: RESULTADOS DEL ANÁLISIS VIAJE ACTUAL -->
         <div id="ai-placeholder" class="card" style="text-align: center; padding: 3rem;">
             <i class="fas fa-brain" style="font-size: 3rem; color: #cbd5e1; margin-bottom: 1rem; display: block;"></i>
-            <h3 style="color: #94a3b8; margin: 0;">Inicia un viaje para ver el análisis predictivo de SENTINEL PRO</h3>
-            <p style="color: #cbd5e1; margin-top: 0.5rem;">El sistema analizará automáticamente tu conducción y predecirá necesidades de mantenimiento</p>
+            <h3 style="color: #94a3b8; margin: 0;">Analiza tu conducción en tiempo real</h3>
+            <p style="color: #cbd5e1; margin-top: 0.5rem;">Inicia un viaje y conduce al menos 5 minutos para recibir análisis IA de tu estilo de conducción</p>
         </div>
 
         <div id="ai-results" style="display: none;"></div>
@@ -353,37 +364,49 @@
         </div>
 
         <!-- SECCIÓN 7: MANTENIMIENTO -->
-        <div class="grid-2">
-            <div class="card">
-                <h2>
+        <div class="card">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                <h2 style="margin: 0;">
                     <i class="fas fa-wrench"></i>
-                    Registro de Mantenimiento
+                    Historial de Mantenimiento
                 </h2>
+                <button id="toggleMaintenanceFormBtn" class="btn btn-primary" style="display: flex; align-items: center; gap: 0.5rem;">
+                    <i class="fas fa-plus"></i>
+                    Agregar
+                </button>
+            </div>
+
+            <!-- FORMULARIO DE REGISTRO (Oculto por defecto) -->
+            <div id="maintenanceFormContainer" style="display: none; margin-bottom: 1.5rem; padding: 1.5rem; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;">
+                <h3 style="margin-top: 0; margin-bottom: 1rem; color: #1e293b; font-size: 1rem;">
+                    <i class="fas fa-plus-circle"></i> Nuevo Registro
+                </h3>
                 <form id="maintenanceForm">
                     <div class="form-group">
                         <label for="maintenanceType">Tipo de Intervención</label>
-                        <input type="text" id="maintenanceType" placeholder="Ej: Cambio de aceite" required>
+                        <input type="text" id="maintenanceType" placeholder="Ej: Cambio de aceite, Revisión de frenos" required>
                     </div>
                     <div class="form-group">
                         <label for="maintenanceDate">Fecha</label>
                         <input type="date" id="maintenanceDate" required>
                     </div>
-                    <button type="submit" class="btn btn-primary" style="width: 100%;">
-                        <i class="fas fa-plus-circle"></i>
-                        Registrar Intervención
-                    </button>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <button type="submit" class="btn btn-success" style="flex: 1;">
+                            <i class="fas fa-save"></i>
+                            Guardar
+                        </button>
+                        <button type="button" id="cancelMaintenanceBtn" class="btn btn-secondary">
+                            <i class="fas fa-times"></i>
+                            Cancelar
+                        </button>
+                    </div>
                 </form>
             </div>
 
-            <div class="card">
-                <h2>
-                    <i class="fas fa-history"></i>
-                    Historial de Mantenimiento
-                </h2>
-                <ul id="maintenanceLog" style="list-style: none; margin: 0; padding: 0;">
-                    <li class="no-data">No hay registros de mantenimiento</li>
-                </ul>
-            </div>
+            <!-- LISTA DE REGISTROS -->
+            <ul id="maintenanceLog" style="list-style: none; margin: 0; padding: 0;">
+                <li class="no-data">No hay registros de mantenimiento</li>
+            </ul>
         </div>
 
     </div>

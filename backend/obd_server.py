@@ -822,6 +822,253 @@ def generate_report():
     return send_file(filename, as_attachment=True)
 
 # =============================================================================
+# ENDPOINTS IA OPTIMIZADOS - SENTINEL PRO v10.0
+# =============================================================================
+
+@app.route("/api/ai/analyze-current-trip", methods=["POST"])
+def analyze_current_trip():
+    """
+    Analiza el viaje actualmente en curso (Dashboard)
+    Solo para datos del viaje actual, mínimo 5 minutos
+    """
+    global model, trip_data
+
+    if not model:
+        return jsonify({"error": "IA no configurada"}), 500
+
+    data = request.json
+    vehicle_info = data.get("vehicle_info", {})
+    trip_data_received = data.get("trip_data", [])
+    transmission = data.get("transmission", "manual")
+
+    # Validar datos mínimos (5 minutos = ~100 registros a 3s cada uno)
+    if len(trip_data_received) < 100:
+        return jsonify({
+            "error": "Datos insuficientes. Conduce al menos 5 minutos.",
+            "data_points": len(trip_data_received),
+            "required": 100
+        }), 400
+
+    try:
+        # Calcular estadísticas del viaje actual
+        rpms = [p.get('rpm', 0) for p in trip_data_received if p.get('rpm')]
+        speeds = [p.get('speed', 0) for p in trip_data_received if p.get('speed')]
+        loads = [p.get('load', 0) for p in trip_data_received if p.get('load')]
+        temps = [p.get('temp', 0) for p in trip_data_received if p.get('temp')]
+
+        duration_min = len(trip_data_received) * 3 / 60  # 3 segundos por punto
+
+        stats = {
+            "rpm_avg": round(statistics.mean(rpms)) if rpms else 0,
+            "rpm_max": round(max(rpms)) if rpms else 0,
+            "speed_avg": round(statistics.mean(speeds)) if speeds else 0,
+            "speed_max": round(max(speeds)) if speeds else 0,
+            "load_avg": round(statistics.mean(loads)) if loads else 0,
+            "temp_max": round(max(temps)) if temps else 0,
+            "duration_min": round(duration_min, 1),
+            "data_points": len(trip_data_received)
+        }
+
+        # Análisis específico por transmisión
+        transmission_context = {
+            'manual': 'transmisión MANUAL - evalúa uso de embrague y cambios',
+            'automatica': 'transmisión AUTOMÁTICA - evalúa suavidad de cambios',
+            'dsg': 'transmisión DSG/DCT - evalúa cambios rápidos y sobrecalentamiento',
+            'cvt': 'transmisión CVT - evalúa eficiencia de correa/cadena'
+        }.get(transmission, 'transmisión MANUAL')
+
+        prompt = f"""Eres ingeniero de diagnóstico automotriz analizando un VIAJE EN CURSO.
+
+VEHÍCULO: {vehicle_info.get('brand', 'N/D')} {vehicle_info.get('model', 'N/D')} ({vehicle_info.get('year', 'N/D')})
+TRANSMISIÓN: {transmission.upper()} - {transmission_context}
+
+DATOS DEL VIAJE ACTUAL (EN CURSO):
+- Duración: {stats['duration_min']} minutos
+- Puntos de datos: {stats['data_points']}
+- RPM: promedio {stats['rpm_avg']}, máximo {stats['rpm_max']}
+- Velocidad: promedio {stats['speed_avg']} km/h, máximo {stats['speed_max']} km/h
+- Carga motor: promedio {stats['load_avg']}%
+- Temperatura máxima: {stats['temp_max']}°C
+
+INSTRUCCIONES:
+1. Evalúa el ESTILO DE CONDUCCIÓN en este viaje
+2. Identifica patrones preocupantes (RPM excesivo, aceleraciones bruscas, etc.)
+3. Da recomendaciones ESPECÍFICAS para este tipo de transmisión
+4. Score de conducción 0-100 (100 = perfecto, eficiente)
+
+Responde SOLO con JSON válido:
+{{
+    "driving_score": 85,
+    "style": "Eficiente|Moderado|Agresivo",
+    "positives": ["Mantiene RPM bajas", "Velocidad constante"],
+    "concerns": ["Aceleraciones bruscas ocasionales"],
+    "recommendations": ["Suavizar aceleración en arranques", "Cambiar marcha antes de 3000 RPM"],
+    "transmission_health": "Buena|Regular|Atención",
+    "trip_summary": "Conducción urbana moderada con algunos picos de RPM"
+}}"""
+
+        response = model.generate_content(prompt)
+        cleaned = response.text.strip().replace("```json", "").replace("```", "").strip()
+
+        json_match = re.search(r'\{[\s\S]*\}', cleaned)
+        if json_match:
+            ai_analysis = json.loads(json_match.group())
+        else:
+            ai_analysis = json.loads(cleaned)
+
+        # Añadir estadísticas al resultado
+        ai_analysis["trip_stats"] = stats
+        ai_analysis["analyzed_at"] = datetime.now().isoformat()
+
+        print(f"[AI-CURRENT-TRIP] ✓ Análisis completado: Score {ai_analysis.get('driving_score', 0)}/100")
+
+        return jsonify(ai_analysis)
+
+    except Exception as e:
+        print(f"[AI-CURRENT-TRIP] ✗ Error: {e}")
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/ai/analyze-vehicle-history", methods=["POST"])
+def analyze_vehicle_history():
+    """
+    Analiza el histórico completo de un vehículo (Fleet/Analytics/Vehicle-Detail)
+    Incluye predicciones, componentes en riesgo, valoración
+    """
+    global model
+
+    if not model:
+        return jsonify({"error": "IA no configurada"}), 500
+
+    if not db:
+        return jsonify({"error": "Base de datos no disponible"}), 500
+
+    data = request.json
+    vehicle_id = data.get("vehicle_id")
+    start_date = data.get("start_date")
+    end_date = data.get("end_date")
+    include_predictions = data.get("include_predictions", True)
+
+    if not vehicle_id:
+        return jsonify({"error": "vehicle_id requerido"}), 400
+
+    try:
+        # Obtener datos del vehículo
+        vehicle = db.get_vehicle(vehicle_id)
+        if not vehicle:
+            return jsonify({"error": "Vehículo no encontrado"}), 404
+
+        # Obtener estadísticas
+        stats = db.get_vehicle_stats(vehicle_id, start_date, end_date)
+
+        # Obtener viajes recientes
+        trips = db.get_vehicle_trips(vehicle_id, start_date, end_date, limit=20)
+
+        # Obtener mantenimiento
+        maintenance = db.get_vehicle_maintenance(vehicle_id)
+
+        # Preparar prompt extenso
+        prompt = f"""Eres sistema de MANTENIMIENTO PREDICTIVO analizando histórico completo.
+
+VEHÍCULO:
+{vehicle['brand']} {vehicle['model']} ({vehicle['year']})
+VIN: {vehicle.get('vin', 'N/D')}
+Combustible: {vehicle.get('fuel_type', 'N/D')}
+Transmisión: {vehicle.get('transmission', 'N/D')}
+Kilometraje actual: {vehicle.get('mileage', 0)} km
+
+ESTADÍSTICAS DEL PERÍODO ANALIZADO:
+- Total viajes: {stats.get('total_trips', 0)}
+- Distancia total: {stats.get('total_distance', 0)} km
+- Velocidad promedio: {stats.get('avg_speed', 0)} km/h
+- Score salud promedio: {stats.get('avg_health', 85)}/100
+
+HISTORIAL MANTENIMIENTO:
+{len(maintenance) if maintenance else 0} intervenciones registradas
+
+INSTRUCCIONES:
+Proporciona análisis PREDICTIVO completo:
+
+1. EVALUACIÓN GENERAL (0-100)
+2. COMPONENTES EN RIESGO (motor, frenos, suspensión, transmisión)
+3. PREDICCIONES 6-12 MESES (averías probables)
+4. RECOMENDACIONES ACCIONABLES (mantenimiento preventivo)
+5. ESTIMACIÓN COSTES (preventivo vs correctivo)
+
+Responde SOLO con JSON válido:
+{{
+    "overall_score": 85,
+    "trend": "Estable|Mejorando|Deteriorando",
+    "components_at_risk": [
+        {{
+            "component": "Bomba de agua",
+            "risk_level": "Alta|Media|Baja",
+            "probability": "25%",
+            "timeframe": "6-9 meses",
+            "symptoms": "Temperatura elevada ocasional",
+            "action": "Inspección en próxima revisión"
+        }}
+    ],
+    "predictions": [
+        {{
+            "issue": "Posible fallo bomba agua",
+            "timeframe": "6-9 meses",
+            "cost_estimate": "200-400€",
+            "prevention": "Cambio preventivo ahora: 150€"
+        }}
+    ],
+    "priority_maintenance": [
+        {{
+            "task": "Cambio aceite + filtros",
+            "urgency": "Alta|Media|Baja",
+            "timeframe": "1 mes",
+            "reason": "Kilometraje alto desde último cambio"
+        }}
+    ],
+    "cost_summary": {{
+        "preventive_now": "300-500€",
+        "if_delayed_6_months": "800-1500€"
+    }},
+    "recommendations": ["Consejo 1", "Consejo 2"]
+}}"""
+
+        response = model.generate_content(prompt)
+        cleaned = response.text.strip().replace("```json", "").replace("```", "").strip()
+
+        json_match = re.search(r'\{[\s\S]*\}', cleaned)
+        if json_match:
+            ai_analysis = json.loads(json_match.group())
+        else:
+            ai_analysis = json.loads(cleaned)
+
+        # Añadir metadata
+        ai_analysis["vehicle_info"] = {
+            "id": vehicle_id,
+            "brand": vehicle['brand'],
+            "model": vehicle['model'],
+            "year": vehicle['year'],
+            "mileage": vehicle.get('mileage', 0)
+        }
+        ai_analysis["analyzed_at"] = datetime.now().isoformat()
+        ai_analysis["period"] = {
+            "start": start_date,
+            "end": end_date,
+            "stats": stats
+        }
+
+        # Guardar análisis en BD (opcional)
+        # db.save_ai_analysis(vehicle_id, ai_analysis, datetime.now())
+
+        print(f"[AI-HISTORY] ✓ Análisis vehículo {vehicle_id}: Score {ai_analysis.get('overall_score', 0)}/100")
+
+        return jsonify(ai_analysis)
+
+    except Exception as e:
+        print(f"[AI-HISTORY] ✗ Error: {e}")
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+# =============================================================================
 # ENDPOINTS REST API - SISTEMA DE FLOTAS v10.0
 # =============================================================================
 

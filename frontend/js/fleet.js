@@ -165,6 +165,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                 e.stopPropagation();
                 startTrip(vehicleId);
             });
+
+            card.querySelector('.btn-ai').addEventListener('click', (e) => {
+                e.stopPropagation();
+                analyzeFleetVehicle(vehicleId);
+            });
         });
     }
 
@@ -237,6 +242,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                     <button class="btn-card btn-start-trip" title="Iniciar viaje">
                         <i class="fas fa-play"></i>
                         Viaje
+                    </button>
+                    <button class="btn-card btn-ai" title="Análisis IA completo">
+                        <i class="fas fa-brain"></i>
                     </button>
                     <button class="btn-card btn-edit" title="Editar">
                         <i class="fas fa-edit"></i>
@@ -476,6 +484,175 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     /**
+     * Analizar vehículo con IA (FASE 2 - v10.0)
+     */
+    async function analyzeFleetVehicle(vehicleId) {
+        SENTINEL.Toast.info('Analizando vehículo con IA...');
+
+        try {
+            const response = await fetch(`${SENTINEL.API.BASE_URL}/api/ai/analyze-vehicle-history`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    vehicle_id: vehicleId,
+                    include_predictions: true
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error('Error en análisis');
+            }
+
+            const analysis = await response.json();
+            showAIAnalysisModal(analysis, vehicleId);
+
+        } catch (error) {
+            console.error('[FLEET-AI] Error:', error);
+            SENTINEL.Toast.error('Error al analizar el vehículo');
+        }
+    }
+
+    /**
+     * Mostrar modal con análisis IA (FASE 2 - v10.0)
+     */
+    function showAIAnalysisModal(analysis, vehicleId) {
+        const vehicle = allVehicles.find(v => v.id === vehicleId);
+        const vehicleName = vehicle ? `${vehicle.brand} ${vehicle.model} (${vehicle.year})` : 'Vehículo';
+
+        // Crear modal
+        const modal = document.createElement('div');
+        modal.className = 'modal-overlay';
+        modal.innerHTML = `
+            <div class="modal-content large">
+                <div class="modal-header">
+                    <h2><i class="fas fa-brain"></i> Análisis Predictivo Completo - ${vehicleName}</h2>
+                    <button class="modal-close">&times;</button>
+                </div>
+                <div class="modal-body">
+                    ${renderAIAnalysisContent(analysis)}
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary modal-close-btn">Cerrar</button>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
+
+        // Event listeners
+        const closeModal = () => modal.remove();
+        modal.querySelector('.modal-close').addEventListener('click', closeModal);
+        modal.querySelector('.modal-close-btn').addEventListener('click', closeModal);
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) closeModal();
+        });
+
+        // Mostrar modal con animación
+        setTimeout(() => modal.classList.add('show'), 10);
+    }
+
+    /**
+     * Renderizar contenido del análisis IA
+     */
+    function renderAIAnalysisContent(analysis) {
+        const scoreClass = analysis.overall_score >= 80 ? 'excellent' :
+                          analysis.overall_score >= 60 ? 'good' :
+                          analysis.overall_score >= 40 ? 'warning' : 'critical';
+
+        let html = `
+            <div class="ai-analysis-summary">
+                <div class="score-display" style="text-align: center; margin: 2rem 0;">
+                    <div class="score-circle ${scoreClass}" style="width: 150px; height: 150px; margin: 0 auto;">
+                        <span class="score-value" style="font-size: 3rem;">${analysis.overall_score}</span>
+                        <span class="score-label">/100</span>
+                    </div>
+                    <h3 style="margin-top: 1rem; color: #1e293b;">Estado General del Vehículo</h3>
+                </div>
+        `;
+
+        // Componentes en riesgo
+        if (analysis.components_at_risk && analysis.components_at_risk.length > 0) {
+            html += `
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <div>
+                        <strong>⚠️ Componentes en Riesgo:</strong>
+                        <ul style="margin: 0.5rem 0 0 0; padding-left: 1.5rem;">
+                            ${analysis.components_at_risk.map(comp => `
+                                <li><strong>${comp.component}:</strong> ${comp.risk_level} - ${comp.reason}</li>
+                            `).join('')}
+                        </ul>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Predicciones
+        if (analysis.predictions && analysis.predictions.length > 0) {
+            html += `
+                <div class="alert alert-info">
+                    <i class="fas fa-crystal-ball"></i>
+                    <div>
+                        <strong>🔮 Predicciones (6-12 meses):</strong>
+                        <ul style="margin: 0.5rem 0 0 0; padding-left: 1.5rem;">
+                            ${analysis.predictions.map(pred => `
+                                <li><strong>${pred.timeframe}:</strong> ${pred.maintenance} - ${pred.estimated_cost}</li>
+                            `).join('')}
+                        </ul>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Recomendaciones
+        if (analysis.recommendations && analysis.recommendations.length > 0) {
+            html += `
+                <div class="alert alert-success">
+                    <i class="fas fa-lightbulb"></i>
+                    <div>
+                        <strong>💡 Recomendaciones:</strong>
+                        <ul style="margin: 0.5rem 0 0 0; padding-left: 1.5rem;">
+                            ${analysis.recommendations.map(rec => `<li>${rec}</li>`).join('')}
+                        </ul>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Resumen de costes
+        if (analysis.cost_summary) {
+            html += `
+                <div style="margin-top: 2rem; padding: 1rem; background: #f8fafc; border-radius: 8px;">
+                    <h3 style="margin: 0 0 1rem 0; color: #1e293b;"><i class="fas fa-euro-sign"></i> Estimación de Costes</h3>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+                        <div>
+                            <span style="color: #64748b; font-size: 0.85rem;">Mantenimiento Inmediato</span>
+                            <strong style="display: block; color: #1e293b; font-size: 1.3rem;">${analysis.cost_summary.immediate}€</strong>
+                        </div>
+                        <div>
+                            <span style="color: #64748b; font-size: 0.85rem;">Próximos 6 meses</span>
+                            <strong style="display: block; color: #1e293b; font-size: 1.3rem;">${analysis.cost_summary.next_6_months}€</strong>
+                        </div>
+                        <div>
+                            <span style="color: #64748b; font-size: 0.85rem;">Total Anual Estimado</span>
+                            <strong style="display: block; color: #1e293b; font-size: 1.3rem;">${analysis.cost_summary.annual_estimate}€</strong>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        html += `
+                <p style="text-align: center; color: #94a3b8; font-size: 0.85rem; margin-top: 1.5rem;">
+                    <i class="fas fa-clock"></i> Análisis realizado: ${new Date(analysis.analyzed_at).toLocaleString('es-ES')}
+                </p>
+            </div>
+        `;
+
+        return html;
+    }
+
+    /**
      * Cambiar vista (grid/list)
      */
     function changeView(view) {
@@ -506,6 +683,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     addVehicleFloatingBtn.addEventListener('click', openAddModal);
     if (addFirstVehicleBtn) {
         addFirstVehicleBtn.addEventListener('click', openAddModal);
+    }
+    const addVehicleHeaderBtn = document.getElementById('addVehicleHeaderBtn');
+    if (addVehicleHeaderBtn) {
+        addVehicleHeaderBtn.addEventListener('click', openAddModal);
     }
 
     // Modal
