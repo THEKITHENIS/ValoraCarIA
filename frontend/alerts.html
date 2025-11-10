@@ -189,7 +189,7 @@
     </div>
 
     <!-- MODAL CREAR/EDITAR REGLA -->
-    <div id="ruleModal" class="modal">
+    <div id="ruleModal" class="modal" style="display: none;">
         <div class="modal-content">
             <div class="modal-header">
                 <h2 id="ruleModalTitle">
@@ -314,7 +314,7 @@
     </div>
 
     <!-- MODAL CONFIRMACIÓN ELIMINAR REGLA -->
-    <div id="deleteRuleModal" class="modal">
+    <div id="deleteRuleModal" class="modal" style="display: none;">
         <div class="modal-content modal-small">
             <div class="modal-header">
                 <h2>
@@ -326,8 +326,9 @@
                 </button>
             </div>
             <div class="modal-body">
-                <p>¿Estás seguro de que deseas eliminar esta regla de alerta?</p>
+                <p class="confirm-message">¿Estás seguro de que deseas eliminar esta regla de alerta?</p>
                 <p id="deleteRuleName" class="delete-rule-name"></p>
+                <p class="confirm-submessage">Esta acción no se puede deshacer.</p>
             </div>
             <div class="modal-footer">
                 <button class="btn btn-secondary" id="cancelDeleteRuleBtn">
