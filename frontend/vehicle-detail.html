@@ -191,6 +191,45 @@
             </div>
         </div>
 
+        <!-- ANÁLISIS INTELIGENTE CON IA (FASE 3 - v10.0) -->
+        <div class="card" style="margin-top: 2rem;" id="aiAnalysisSection">
+            <h2 style="margin-bottom: 1.5rem;">
+                <i class="fas fa-brain" style="color: var(--ai-purple);"></i>
+                Análisis Inteligente con IA
+            </h2>
+            <p style="color: #64748b; margin-bottom: 2rem;">
+                Obtén insights avanzados sobre el estado de tu vehículo con análisis predictivo impulsado por IA
+            </p>
+
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem;">
+                <!-- Botón: Análisis General -->
+                <button id="aiGeneralBtn" class="btn btn-ai btn-large" disabled style="display: flex; flex-direction: column; align-items: center; padding: 2rem; text-align: center; height: auto;">
+                    <i class="fas fa-brain" style="font-size: 2.5rem; margin-bottom: 1rem;"></i>
+                    <strong style="font-size: 1.1rem;">Análisis General</strong>
+                    <small style="margin-top: 0.5rem; opacity: 0.8;">Estado completo del vehículo</small>
+                </button>
+
+                <!-- Botón: Predicción de Averías -->
+                <button id="aiFailuresBtn" class="btn btn-ai btn-large" disabled style="display: flex; flex-direction: column; align-items: center; padding: 2rem; text-align: center; height: auto;">
+                    <i class="fas fa-exclamation-triangle" style="font-size: 2.5rem; margin-bottom: 1rem;"></i>
+                    <strong style="font-size: 1.1rem;">Predicción de Averías</strong>
+                    <small style="margin-top: 0.5rem; opacity: 0.8;">Fallos comunes del modelo</small>
+                </button>
+
+                <!-- Botón: Valoración Actual -->
+                <button id="aiValuationBtn" class="btn btn-ai btn-large" disabled style="display: flex; flex-direction: column; align-items: center; padding: 2rem; text-align: center; height: auto;">
+                    <i class="fas fa-euro-sign" style="font-size: 2.5rem; margin-bottom: 1rem;"></i>
+                    <strong style="font-size: 1.1rem;">Valoración Actual</strong>
+                    <small style="margin-top: 0.5rem; opacity: 0.8;">Precio de mercado estimado</small>
+                </button>
+            </div>
+
+            <!-- Contenedor para resultados de IA -->
+            <div id="aiResultsContainer" style="margin-top: 2rem; display: none;">
+                <!-- Los resultados se mostrarán aquí dinámicamente -->
+            </div>
+        </div>
+
         <!-- HISTORIAL DE VIAJES -->
         <div class="card" style="margin-top: 2rem;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
@@ -645,9 +684,268 @@
                 }
             }
 
+            // === FUNCIONES DE ANÁLISIS IA (FASE 3 - v10.0) ===
+
+            /**
+             * Análisis General del Vehículo
+             */
+            async function analyzeGeneral() {
+                SENTINEL.Toast.info('Analizando vehículo con IA...');
+
+                try {
+                    const response = await fetch('http://localhost:5000/api/ai/analyze-vehicle-history', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            vehicle_id: vehicleId,
+                            include_predictions: true
+                        })
+                    });
+
+                    if (!response.ok) throw new Error('Error en análisis');
+
+                    const analysis = await response.json();
+                    displayGeneralAnalysis(analysis);
+
+                } catch (error) {
+                    console.error('[AI-GENERAL] Error:', error);
+                    SENTINEL.Toast.error('Error al analizar el vehículo');
+                }
+            }
+
+            /**
+             * Predicción de Averías
+             */
+            async function analyzeFailures() {
+                if (!vehicleData) return;
+
+                SENTINEL.Toast.info('Buscando averías comunes...');
+
+                try {
+                    const response = await fetch('http://localhost:5000/api/ai/common-failures', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            vehicle_id: vehicleId,
+                            brand: vehicleData.brand,
+                            model: vehicleData.model,
+                            year: vehicleData.year
+                        })
+                    });
+
+                    if (!response.ok) throw new Error('Error en análisis');
+
+                    const analysis = await response.json();
+                    displayFailuresAnalysis(analysis);
+
+                } catch (error) {
+                    console.error('[AI-FAILURES] Error:', error);
+                    SENTINEL.Toast.error('Error al buscar averías');
+                }
+            }
+
+            /**
+             * Valoración del Vehículo
+             */
+            async function analyzeValuation() {
+                if (!vehicleData) return;
+
+                SENTINEL.Toast.info('Calculando valoración...');
+
+                try {
+                    const response = await fetch('http://localhost:5000/api/ai/valuation', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            vehicle_id: vehicleId,
+                            brand: vehicleData.brand,
+                            model: vehicleData.model,
+                            year: vehicleData.year,
+                            mileage: vehicleData.mileage
+                        })
+                    });
+
+                    if (!response.ok) throw new Error('Error en valoración');
+
+                    const valuation = await response.json();
+                    displayValuationAnalysis(valuation);
+
+                } catch (error) {
+                    console.error('[AI-VALUATION] Error:', error);
+                    SENTINEL.Toast.error('Error al calcular valoración');
+                }
+            }
+
+            /**
+             * Mostrar Análisis General
+             */
+            function displayGeneralAnalysis(analysis) {
+                const container = document.getElementById('aiResultsContainer');
+                const scoreClass = analysis.overall_score >= 80 ? 'excellent' :
+                                  analysis.overall_score >= 60 ? 'good' :
+                                  analysis.overall_score >= 40 ? 'warning' : 'critical';
+
+                container.innerHTML = `
+                    <div class="ai-analysis-result">
+                        <h3><i class="fas fa-brain"></i> Análisis General Completo</h3>
+
+                        <div style="text-align: center; margin: 2rem 0;">
+                            <div class="score-circle ${scoreClass}" style="width: 120px; height: 120px; margin: 0 auto;">
+                                <span class="score-value" style="font-size: 2.5rem;">${analysis.overall_score}</span>
+                                <span class="score-label">/100</span>
+                            </div>
+                        </div>
+
+                        ${analysis.components_at_risk && analysis.components_at_risk.length > 0 ? `
+                        <div class="alert alert-warning">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <div>
+                                <strong>Componentes en Riesgo:</strong>
+                                <ul style="margin: 0.5rem 0 0 0; padding-left: 1.5rem;">
+                                    ${analysis.components_at_risk.map(comp => `
+                                        <li><strong>${comp.component}:</strong> ${comp.risk_level} - ${comp.reason}</li>
+                                    `).join('')}
+                                </ul>
+                            </div>
+                        </div>
+                        ` : ''}
+
+                        ${analysis.predictions && analysis.predictions.length > 0 ? `
+                        <div class="alert alert-info">
+                            <i class="fas fa-crystal-ball"></i>
+                            <div>
+                                <strong>Predicciones:</strong>
+                                <ul style="margin: 0.5rem 0 0 0; padding-left: 1.5rem;">
+                                    ${analysis.predictions.map(pred => `
+                                        <li><strong>${pred.timeframe}:</strong> ${pred.maintenance} - ${pred.estimated_cost}</li>
+                                    `).join('')}
+                                </ul>
+                            </div>
+                        </div>
+                        ` : ''}
+
+                        ${analysis.recommendations && analysis.recommendations.length > 0 ? `
+                        <div class="alert alert-success">
+                            <i class="fas fa-lightbulb"></i>
+                            <div>
+                                <strong>Recomendaciones:</strong>
+                                <ul style="margin: 0.5rem 0 0 0; padding-left: 1.5rem;">
+                                    ${analysis.recommendations.map(rec => `<li>${rec}</li>`).join('')}
+                                </ul>
+                            </div>
+                        </div>
+                        ` : ''}
+                    </div>
+                `;
+                container.style.display = 'block';
+                container.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+
+            /**
+             * Mostrar Predicción de Averías
+             */
+            function displayFailuresAnalysis(analysis) {
+                const container = document.getElementById('aiResultsContainer');
+
+                container.innerHTML = `
+                    <div class="ai-analysis-result">
+                        <h3><i class="fas fa-exclamation-triangle"></i> Averías Comunes - ${vehicleData.brand} ${vehicleData.model}</h3>
+
+                        ${analysis.failures && analysis.failures.length > 0 ? `
+                            <div style="margin-top: 1.5rem;">
+                                ${analysis.failures.map(failure => `
+                                    <div class="alert alert-${failure.severity === 'Alta' ? 'danger' : failure.severity === 'Media' ? 'warning' : 'info'}" style="margin-bottom: 1rem;">
+                                        <i class="fas fa-wrench"></i>
+                                        <div>
+                                            <strong>${failure.title}</strong>
+                                            <p style="margin: 0.5rem 0 0 0;"><strong>Síntoma:</strong> ${failure.symptom}</p>
+                                            <p style="margin: 0.25rem 0;"><strong>Causa:</strong> ${failure.cause}</p>
+                                            <p style="margin: 0.25rem 0;"><strong>Solución:</strong> ${failure.solution}</p>
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        ` : '<p class="no-data">No se encontraron averías comunes específicas</p>'}
+
+                        ${analysis.recommendation ? `
+                        <div class="alert alert-success" style="margin-top: 1.5rem;">
+                            <i class="fas fa-user-md"></i>
+                            <div>
+                                <strong>Recomendación del Experto:</strong>
+                                <p style="margin: 0.5rem 0 0 0;">${analysis.recommendation}</p>
+                            </div>
+                        </div>
+                        ` : ''}
+                    </div>
+                `;
+                container.style.display = 'block';
+                container.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+
+            /**
+             * Mostrar Valoración
+             */
+            function displayValuationAnalysis(valuation) {
+                const container = document.getElementById('aiResultsContainer');
+
+                container.innerHTML = `
+                    <div class="ai-analysis-result">
+                        <h3><i class="fas fa-euro-sign"></i> Valoración de Mercado</h3>
+
+                        <div style="margin: 2rem 0; padding: 2rem; background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%); border-radius: 12px;">
+                            <div style="text-align: center;">
+                                <p style="color: #64748b; margin-bottom: 0.5rem; font-size: 0.9rem;">Rango de Mercado</p>
+                                <div style="display: flex; justify-content: center; align-items: center; gap: 2rem; flex-wrap: wrap;">
+                                    <div>
+                                        <span style="color: #64748b; font-size: 0.85rem;">Mínimo</span>
+                                        <strong style="display: block; color: #1e293b; font-size: 1.5rem;">${valuation.min_price}€</strong>
+                                    </div>
+                                    <div style="font-size: 2rem; color: #cbd5e1;">-</div>
+                                    <div>
+                                        <span style="color: #64748b; font-size: 0.85rem;">Máximo</span>
+                                        <strong style="display: block; color: #1e293b; font-size: 1.5rem;">${valuation.max_price}€</strong>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div style="margin-top: 2rem; padding-top: 2rem; border-top: 2px solid #cbd5e1; text-align: center;">
+                                <p style="color: #64748b; margin-bottom: 0.5rem; font-size: 0.9rem;">Precio Realista Ajustado</p>
+                                <strong style="display: block; color: var(--ai-purple); font-size: 2.5rem;">${valuation.realistic_price}€</strong>
+                            </div>
+                        </div>
+
+                        ${valuation.justification ? `
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle"></i>
+                            <div>
+                                <strong>Justificación del Tasador:</strong>
+                                <p style="margin: 0.5rem 0 0 0;">${valuation.justification}</p>
+                            </div>
+                        </div>
+                        ` : ''}
+                    </div>
+                `;
+                container.style.display = 'block';
+                container.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+
+            // Event listeners para botones IA
+            document.getElementById('aiGeneralBtn').addEventListener('click', analyzeGeneral);
+            document.getElementById('aiFailuresBtn').addEventListener('click', analyzeFailures);
+            document.getElementById('aiValuationBtn').addEventListener('click', analyzeValuation);
+
+            // === FIN FUNCIONES DE ANÁLISIS IA ===
+
             // Inicializar
             await loadVehicleData();
             await loadVehicleSelector();
+
+            // Habilitar botones IA después de cargar datos
+            if (vehicleData) {
+                document.getElementById('aiGeneralBtn').disabled = false;
+                document.getElementById('aiFailuresBtn').disabled = false;
+                document.getElementById('aiValuationBtn').disabled = false;
+            }
         });
 
         function viewTrip(tripId) {
