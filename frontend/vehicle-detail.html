@@ -50,12 +50,22 @@
     <!-- CONTENEDOR PRINCIPAL -->
     <div class="container fleet-container">
 
-        <!-- BOTÓN VOLVER -->
-        <div style="margin-bottom: 1.5rem;">
+        <!-- BOTÓN VOLVER Y SELECTOR DE VEHÍCULO -->
+        <div style="margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
             <a href="fleet.html" class="btn btn-secondary">
                 <i class="fas fa-arrow-left"></i>
                 Volver a Flotas
             </a>
+
+            <!-- SELECTOR DE VEHÍCULOS -->
+            <div style="display: flex; align-items: center; gap: 1rem; flex: 1; max-width: 500px;">
+                <label for="vehicleSelector" style="color: #1e293b; font-weight: 500; white-space: nowrap;">
+                    <i class="fas fa-car"></i> Vehículo:
+                </label>
+                <select id="vehicleSelector" class="form-control" style="flex: 1;">
+                    <option value="">Cargando vehículos...</option>
+                </select>
+            </div>
         </div>
 
         <!-- TARJETA DE INFORMACIÓN DEL VEHÍCULO -->
@@ -610,8 +620,34 @@
 
             document.getElementById('tripsLimitSelect').addEventListener('change', loadTrips);
 
+            // Cargar todos los vehículos en el selector
+            async function loadVehicleSelector() {
+                try {
+                    const data = await SENTINEL.API.get('/api/vehicles');
+                    const vehicles = data.vehicles || [];
+                    const selector = document.getElementById('vehicleSelector');
+
+                    if (selector) {
+                        selector.innerHTML = vehicles.map(v =>
+                            `<option value="${v.id}" ${v.id == vehicleId ? 'selected' : ''}>${v.brand} ${v.model} (${v.year})</option>`
+                        ).join('');
+
+                        // Manejar cambio de vehículo
+                        selector.addEventListener('change', (e) => {
+                            const newVehicleId = e.target.value;
+                            if (newVehicleId && newVehicleId != vehicleId) {
+                                window.location.href = `vehicle-detail.html?id=${newVehicleId}`;
+                            }
+                        });
+                    }
+                } catch (error) {
+                    console.error('[VEHICLE-DETAIL] Error cargando selector:', error);
+                }
+            }
+
             // Inicializar
             await loadVehicleData();
+            await loadVehicleSelector();
         });
 
         function viewTrip(tripId) {

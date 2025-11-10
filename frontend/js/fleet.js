@@ -507,6 +507,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (addFirstVehicleBtn) {
         addFirstVehicleBtn.addEventListener('click', openAddModal);
     }
+    const addVehicleHeaderBtn = document.getElementById('addVehicleHeaderBtn');
+    if (addVehicleHeaderBtn) {
+        addVehicleHeaderBtn.addEventListener('click', openAddModal);
+    }
 
     // Modal
     closeModal.addEventListener('click', closeVehicleModal);

@@ -1459,6 +1459,38 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
+    // Toggle formulario de mantenimiento
+    const toggleMaintenanceFormBtn = document.getElementById('toggleMaintenanceFormBtn');
+    const maintenanceFormContainer = document.getElementById('maintenanceFormContainer');
+    const cancelMaintenanceBtn = document.getElementById('cancelMaintenanceBtn');
+
+    if (toggleMaintenanceFormBtn && maintenanceFormContainer) {
+        toggleMaintenanceFormBtn.addEventListener('click', () => {
+            const isHidden = maintenanceFormContainer.style.display === 'none';
+            maintenanceFormContainer.style.display = isHidden ? 'block' : 'none';
+
+            if (isHidden) {
+                toggleMaintenanceFormBtn.innerHTML = '<i class="fas fa-minus"></i> Cerrar';
+                toggleMaintenanceFormBtn.classList.remove('btn-primary');
+                toggleMaintenanceFormBtn.classList.add('btn-secondary');
+            } else {
+                toggleMaintenanceFormBtn.innerHTML = '<i class="fas fa-plus"></i> Agregar';
+                toggleMaintenanceFormBtn.classList.remove('btn-secondary');
+                toggleMaintenanceFormBtn.classList.add('btn-primary');
+            }
+        });
+    }
+
+    if (cancelMaintenanceBtn && maintenanceFormContainer && toggleMaintenanceFormBtn) {
+        cancelMaintenanceBtn.addEventListener('click', () => {
+            maintenanceFormContainer.style.display = 'none';
+            maintenanceForm.reset();
+            toggleMaintenanceFormBtn.innerHTML = '<i class="fas fa-plus"></i> Agregar';
+            toggleMaintenanceFormBtn.classList.remove('btn-secondary');
+            toggleMaintenanceFormBtn.classList.add('btn-primary');
+        });
+    }
+
     maintenanceForm.addEventListener('submit', (e) => {
         e.preventDefault();
         maintenanceHistory.push({
@@ -1468,6 +1500,14 @@ document.addEventListener('DOMContentLoaded', () => {
         saveMaintenanceLog();
         renderMaintenanceLog();
         maintenanceForm.reset();
+
+        // Ocultar formulario después de guardar
+        if (maintenanceFormContainer && toggleMaintenanceFormBtn) {
+            maintenanceFormContainer.style.display = 'none';
+            toggleMaintenanceFormBtn.innerHTML = '<i class="fas fa-plus"></i> Agregar';
+            toggleMaintenanceFormBtn.classList.remove('btn-secondary');
+            toggleMaintenanceFormBtn.classList.add('btn-primary');
+        }
     });
     
     maintenanceLog.addEventListener('click', (e) => {
