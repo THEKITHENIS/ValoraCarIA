@@ -87,6 +87,38 @@ document.addEventListener('DOMContentLoaded', () => {
     const ANALYSIS_MIN_POINTS = 100; // 5 minutos a 3s por punto
     const ANALYSIS_MIN_DURATION = 5; // minutos
 
+    // === GESTIÓN DE VIAJES (FASE 4 - v10.0) ===
+    let activeVehicleId = null; // ID del vehículo seleccionado para el viaje
+    let activeVehicleInfo = null; // Información completa del vehículo
+    let obdConnectionCheckInterval = null;
+    let tripDurationInterval = null;
+    let gpsTrackingInterval = null;
+    let dataCollectionInterval = null;
+    let tripStartTime = null;
+    let tripDistance = 0;
+    let tripDataPoints = 0;
+    let obdDataBatch = []; // Batch de datos OBD para enviar al servidor
+    const OBD_BATCH_SIZE = 30; // Guardar cada 30 registros
+
+    // Referencias DOM - Trip Control
+    const tripControlCard = document.getElementById('tripControlCard');
+    const statusIndicator = document.getElementById('statusIndicator');
+    const vehicleSelectionSection = document.getElementById('vehicleSelectionSection');
+    const tripVehicleSelect = document.getElementById('tripVehicleSelect');
+    const confirmVehicleBtn = document.getElementById('confirmVehicleBtn');
+    const connectedVehicleCard = document.getElementById('connectedVehicleCard');
+    const connectedVehicleName = document.getElementById('connectedVehicleName');
+    const connectedVehicleDetails = document.getElementById('connectedVehicleDetails');
+    const changeVehicleBtn = document.getElementById('changeVehicleBtn');
+    const tripControlButtons = document.getElementById('tripControlButtons');
+    const startTripBtn = document.getElementById('startTripBtn');
+    const endTripBtn = document.getElementById('endTripBtn');
+    const tripActiveBanner = document.getElementById('tripActiveBanner');
+    const tripDurationEl = document.getElementById('tripDuration');
+    const tripDistanceEl = document.getElementById('tripDistance');
+    const tripDataPointsEl = document.getElementById('tripDataPoints');
+    const vehicleChangeWarning = document.getElementById('vehicleChangeWarning');
+
     // === SELECTOR DE MODO DE TRABAJO ===
 
     function initModeSelector() {
@@ -855,6 +887,532 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // === FUNCIONES DE RED ===
+
+    // === GESTIÓN DE VIAJES - CONTROL UI Y OBD (FASE 4 - v10.0) ===
+
+    /**
+     * Verificar conexión OBD y actualizar UI
+     */
+    async function checkOBDConnection() {
+        try {
+            const response = await fetch(`${API_URL}/api/health`, {
+                method: 'GET',
+                headers: { 'Content-Type': 'application/json' }
+            });
+
+            if (!response.ok) {
+                updateConnectionStatus('disconnected');
+                return;
+            }
+
+            const health = await response.json();
+            const isConnected = health.obd_connected || false;
+            const vehicleVin = health.vehicle_vin || null;
+
+            if (isConnected) {
+                updateConnectionStatus('connected');
+
+                // Si hay conexión OBD pero no hay vehículo seleccionado, mostrar selector
+                if (!activeVehicleId) {
+                    await loadAvailableVehicles();
+                    vehicleSelectionSection.style.display = 'block';
+                    connectedVehicleCard.style.display = 'none';
+                    tripControlButtons.style.display = 'none';
+                }
+                // Si hay vehículo seleccionado, verificar si es el mismo
+                else if (vehicleVin && activeVehicleInfo && vehicleVin !== activeVehicleInfo.vin) {
+                    checkVehicleChange(vehicleVin);
+                }
+            } else {
+                updateConnectionStatus('searching');
+                vehicleSelectionSection.style.display = 'none';
+                connectedVehicleCard.style.display = 'none';
+                tripControlButtons.style.display = 'none';
+            }
+        } catch (error) {
+            console.error('[TRIP] Error checking OBD connection:', error);
+            updateConnectionStatus('disconnected');
+        }
+    }
+
+    /**
+     * Actualizar indicador de estado de conexión
+     */
+    function updateConnectionStatus(status) {
+        statusIndicator.className = 'status-indicator';
+
+        if (status === 'searching') {
+            statusIndicator.classList.add('searching');
+            statusIndicator.innerHTML = '<i class="fas fa-circle"></i><span>Buscando adaptador OBD...</span>';
+        } else if (status === 'connected') {
+            statusIndicator.classList.add('connected');
+            if (activeVehicleInfo) {
+                const vehicleName = `${activeVehicleInfo.brand} ${activeVehicleInfo.model}`.trim();
+                statusIndicator.innerHTML = `<i class="fas fa-circle"></i><span>Conectado - ${vehicleName}</span>`;
+            } else {
+                statusIndicator.innerHTML = '<i class="fas fa-circle"></i><span>Adaptador OBD conectado</span>';
+            }
+        } else {
+            statusIndicator.classList.add('disconnected');
+            statusIndicator.innerHTML = '<i class="fas fa-circle"></i><span>Desconectado</span>';
+        }
+    }
+
+    /**
+     * Cargar vehículos disponibles de la flota
+     */
+    async function loadAvailableVehicles() {
+        try {
+            const response = await fetch(`${API_URL}/api/vehicles`, {
+                method: 'GET',
+                headers: { 'Content-Type': 'application/json' }
+            });
+
+            if (!response.ok) {
+                console.error('[TRIP] Error loading vehicles');
+                return;
+            }
+
+            const vehicles = await response.json();
+
+            // Limpiar y poblar dropdown
+            tripVehicleSelect.innerHTML = '<option value="">-- Selecciona un vehículo --</option>';
+
+            vehicles.forEach(vehicle => {
+                const option = document.createElement('option');
+                option.value = vehicle.id;
+                option.textContent = `${vehicle.brand} ${vehicle.model} (${vehicle.year}) - ${vehicle.mileage} km`;
+                option.dataset.vehicleInfo = JSON.stringify(vehicle);
+                tripVehicleSelect.appendChild(option);
+            });
+        } catch (error) {
+            console.error('[TRIP] Error loading vehicles:', error);
+        }
+    }
+
+    /**
+     * Confirmar selección de vehículo
+     */
+    function confirmVehicleSelection() {
+        const selectedOption = tripVehicleSelect.options[tripVehicleSelect.selectedIndex];
+
+        if (!selectedOption || !selectedOption.value) {
+            SENTINEL.Toast.warning('Por favor selecciona un vehículo');
+            return;
+        }
+
+        activeVehicleId = selectedOption.value;
+        activeVehicleInfo = JSON.parse(selectedOption.dataset.vehicleInfo);
+
+        // Guardar en localStorage para persistencia
+        localStorage.setItem('activeVehicleId', activeVehicleId);
+        localStorage.setItem('activeVehicleInfo', JSON.stringify(activeVehicleInfo));
+
+        // Actualizar UI
+        const vehicleName = `${activeVehicleInfo.brand} ${activeVehicleInfo.model}`.trim();
+        const vehicleDetails = `${activeVehicleInfo.year} - ${activeVehicleInfo.mileage} km - ${activeVehicleInfo.fuel_type}`;
+
+        connectedVehicleName.textContent = vehicleName;
+        connectedVehicleDetails.textContent = vehicleDetails;
+
+        // Mostrar card de vehículo conectado y botones de viaje
+        vehicleSelectionSection.style.display = 'none';
+        connectedVehicleCard.style.display = 'block';
+        tripControlButtons.style.display = 'block';
+
+        updateConnectionStatus('connected');
+
+        SENTINEL.Toast.success(`Vehículo ${vehicleName} seleccionado`);
+    }
+
+    /**
+     * Cambiar vehículo seleccionado
+     */
+    function changeVehicle() {
+        if (tripActive) {
+            SENTINEL.Toast.error('Finaliza el viaje antes de cambiar de vehículo');
+            return;
+        }
+
+        activeVehicleId = null;
+        activeVehicleInfo = null;
+        localStorage.removeItem('activeVehicleId');
+        localStorage.removeItem('activeVehicleInfo');
+
+        connectedVehicleCard.style.display = 'none';
+        tripControlButtons.style.display = 'none';
+        vehicleSelectionSection.style.display = 'block';
+
+        loadAvailableVehicles();
+    }
+
+    /**
+     * Iniciar viaje
+     */
+    async function startTrip() {
+        if (!activeVehicleId || !activeVehicleInfo) {
+            SENTINEL.Toast.error('Selecciona un vehículo primero');
+            return;
+        }
+
+        if (tripActive) {
+            SENTINEL.Toast.warning('Ya hay un viaje en curso');
+            return;
+        }
+
+        try {
+            // Crear viaje en el backend
+            const response = await fetch(`${API_URL}/api/trips/start`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    vehicle_id: activeVehicleId,
+                    start_time: new Date().toISOString()
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error('Error al iniciar viaje en el backend');
+            }
+
+            const tripData = await response.json();
+            currentTripId = tripData.trip_id;
+
+            // Inicializar variables de viaje
+            tripActive = true;
+            tripStartTime = Date.now();
+            tripDistance = 0;
+            tripDataPoints = 0;
+            obdDataBatch = [];
+            currentTripStartTime = Date.now();
+            currentTripData = [];
+
+            // Actualizar UI
+            startTripBtn.style.display = 'none';
+            endTripBtn.style.display = 'block';
+            tripActiveBanner.style.display = 'block';
+            connectedVehicleCard.style.display = 'none';
+
+            // Iniciar tracking
+            startGPSTracking();
+            startDataCollection();
+            startTripDurationTimer();
+
+            SENTINEL.Toast.success('¡Viaje iniciado! Conduce con seguridad');
+        } catch (error) {
+            console.error('[TRIP] Error starting trip:', error);
+            SENTINEL.Toast.error('Error al iniciar el viaje');
+        }
+    }
+
+    /**
+     * Finalizar viaje
+     */
+    async function endTrip() {
+        if (!tripActive || !currentTripId) {
+            SENTINEL.Toast.warning('No hay viaje activo');
+            return;
+        }
+
+        try {
+            // Guardar datos pendientes
+            if (obdDataBatch.length > 0) {
+                await saveOBDDataBatch();
+            }
+
+            // Finalizar viaje en el backend
+            const response = await fetch(`${API_URL}/api/trips/${currentTripId}/stop`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    stats: {
+                        end_time: new Date().toISOString(),
+                        distance: tripDistance,
+                        data_points: tripDataPoints
+                    }
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error('Error al finalizar viaje en el backend');
+            }
+
+            // Detener tracking
+            stopGPSTracking();
+            stopDataCollection();
+            stopTripDurationTimer();
+
+            // Resetear variables
+            tripActive = false;
+            currentTripId = null;
+            tripStartTime = null;
+            tripDistance = 0;
+            tripDataPoints = 0;
+            obdDataBatch = [];
+            currentTripStartTime = null;
+            currentTripData = [];
+            lowRpmCount = 0;
+
+            // Actualizar UI
+            startTripBtn.style.display = 'block';
+            endTripBtn.style.display = 'none';
+            tripActiveBanner.style.display = 'none';
+            connectedVehicleCard.style.display = 'block';
+
+            SENTINEL.Toast.success('Viaje finalizado correctamente');
+        } catch (error) {
+            console.error('[TRIP] Error ending trip:', error);
+            SENTINEL.Toast.error('Error al finalizar el viaje');
+        }
+    }
+
+    /**
+     * Iniciar temporizador de duración del viaje
+     */
+    function startTripDurationTimer() {
+        tripDurationInterval = setInterval(updateTripDuration, 1000);
+    }
+
+    /**
+     * Detener temporizador de duración
+     */
+    function stopTripDurationTimer() {
+        if (tripDurationInterval) {
+            clearInterval(tripDurationInterval);
+            tripDurationInterval = null;
+        }
+    }
+
+    /**
+     * Actualizar duración del viaje en UI
+     */
+    function updateTripDuration() {
+        if (!tripStartTime) return;
+
+        const elapsed = Math.floor((Date.now() - tripStartTime) / 1000);
+        const hours = Math.floor(elapsed / 3600);
+        const minutes = Math.floor((elapsed % 3600) / 60);
+        const seconds = elapsed % 60;
+
+        const formatted = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+        tripDurationEl.textContent = formatted;
+
+        // Actualizar distancia y puntos de datos
+        tripDistanceEl.textContent = `${tripDistance.toFixed(1)} km`;
+        tripDataPointsEl.textContent = `${tripDataPoints} datos`;
+    }
+
+    /**
+     * Iniciar tracking GPS
+     */
+    function startGPSTracking() {
+        if (!navigator.geolocation) {
+            console.warn('[TRIP] GPS no disponible');
+            return;
+        }
+
+        gpsWatchId = navigator.geolocation.watchPosition(
+            (position) => {
+                const newPosition = {
+                    lat: position.coords.latitude,
+                    lng: position.coords.longitude,
+                    timestamp: Date.now()
+                };
+
+                // Calcular distancia si hay posición anterior
+                if (lastGPSPosition) {
+                    const distance = calculateDistance(
+                        lastGPSPosition.lat,
+                        lastGPSPosition.lng,
+                        newPosition.lat,
+                        newPosition.lng
+                    );
+                    tripDistance += distance;
+                }
+
+                lastGPSPosition = newPosition;
+                gpsDataPoints.push(newPosition);
+            },
+            (error) => {
+                console.error('[TRIP] GPS error:', error);
+            },
+            {
+                enableHighAccuracy: true,
+                timeout: 10000,
+                maximumAge: 0
+            }
+        );
+
+        gpsEnabled = true;
+    }
+
+    /**
+     * Detener tracking GPS
+     */
+    function stopGPSTracking() {
+        if (gpsWatchId) {
+            navigator.geolocation.clearWatch(gpsWatchId);
+            gpsWatchId = null;
+        }
+        gpsEnabled = false;
+        lastGPSPosition = null;
+        gpsDataPoints = [];
+    }
+
+    /**
+     * Calcular distancia entre dos coordenadas (Haversine formula)
+     */
+    function calculateDistance(lat1, lon1, lat2, lon2) {
+        const R = 6371; // Radio de la Tierra en km
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLon = (lon2 - lon1) * Math.PI / 180;
+        const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                  Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                  Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return R * c;
+    }
+
+    /**
+     * Iniciar recolección de datos OBD
+     */
+    function startDataCollection() {
+        dataCollectionInterval = setInterval(collectOBDData, 3000);
+    }
+
+    /**
+     * Detener recolección de datos
+     */
+    function stopDataCollection() {
+        if (dataCollectionInterval) {
+            clearInterval(dataCollectionInterval);
+            dataCollectionInterval = null;
+        }
+    }
+
+    /**
+     * Recolectar datos OBD y añadir al batch
+     */
+    async function collectOBDData() {
+        if (!tripActive || !currentTripId) return;
+
+        try {
+            const response = await fetch(`${API_URL}/live`, {
+                method: 'GET',
+                headers: { 'Content-Type': 'application/json' }
+            });
+
+            if (!response.ok) return;
+
+            const data = await response.json();
+
+            // Añadir al batch
+            obdDataBatch.push({
+                timestamp: new Date().toISOString(),
+                rpm: data.RPM || 0,
+                speed: data.SPEED || 0,
+                coolant_temp: data.COOLANT_TEMP || 0,
+                intake_temp: data.INTAKE_TEMP || 0,
+                engine_load: data.ENGINE_LOAD || 0,
+                throttle_pos: data.THROTTLE_POS || 0,
+                fuel_pressure: data.FUEL_PRESSURE || 0,
+                maf: data.MAF || 0,
+                gps_lat: lastGPSPosition ? lastGPSPosition.lat : null,
+                gps_lng: lastGPSPosition ? lastGPSPosition.lng : null
+            });
+
+            tripDataPoints++;
+
+            // Si alcanzamos el tamaño del batch, guardar
+            if (obdDataBatch.length >= OBD_BATCH_SIZE) {
+                await saveOBDDataBatch();
+            }
+        } catch (error) {
+            console.error('[TRIP] Error collecting OBD data:', error);
+        }
+    }
+
+    /**
+     * Guardar batch de datos OBD al servidor
+     */
+    async function saveOBDDataBatch() {
+        if (obdDataBatch.length === 0 || !currentTripId) return;
+
+        try {
+            const response = await fetch(`${API_URL}/api/trips/${currentTripId}/data`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    data_points: obdDataBatch
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error('Error al guardar batch de datos');
+            }
+
+            console.log(`[TRIP] Guardados ${obdDataBatch.length} puntos de datos`);
+            obdDataBatch = []; // Limpiar batch
+        } catch (error) {
+            console.error('[TRIP] Error saving OBD data batch:', error);
+        }
+    }
+
+    /**
+     * Verificar si cambió el vehículo conectado
+     */
+    function checkVehicleChange(newVin) {
+        if (tripActive) {
+            // Si hay viaje activo, mostrar advertencia y finalizar viaje
+            vehicleChangeWarning.style.display = 'block';
+            SENTINEL.Toast.error('Vehículo diferente detectado. Finalizando viaje...');
+
+            setTimeout(() => {
+                endTrip();
+                vehicleChangeWarning.style.display = 'none';
+            }, 3000);
+        } else {
+            // Si no hay viaje, solo pedir reselección
+            SENTINEL.Toast.warning('Se detectó un vehículo diferente. Por favor, reselecciona.');
+            changeVehicle();
+        }
+    }
+
+    /**
+     * Inicializar sistema de gestión de viajes
+     */
+    function initTripManagement() {
+        // Cargar vehículo activo de localStorage si existe
+        const savedVehicleId = localStorage.getItem('activeVehicleId');
+        const savedVehicleInfo = localStorage.getItem('activeVehicleInfo');
+
+        if (savedVehicleId && savedVehicleInfo) {
+            activeVehicleId = savedVehicleId;
+            activeVehicleInfo = JSON.parse(savedVehicleInfo);
+
+            const vehicleName = `${activeVehicleInfo.brand} ${activeVehicleInfo.model}`.trim();
+            const vehicleDetails = `${activeVehicleInfo.year} - ${activeVehicleInfo.mileage} km - ${activeVehicleInfo.fuel_type}`;
+
+            connectedVehicleName.textContent = vehicleName;
+            connectedVehicleDetails.textContent = vehicleDetails;
+            connectedVehicleCard.style.display = 'block';
+            tripControlButtons.style.display = 'block';
+        }
+
+        // Event listeners
+        confirmVehicleBtn.addEventListener('click', confirmVehicleSelection);
+        changeVehicleBtn.addEventListener('click', changeVehicle);
+        startTripBtn.addEventListener('click', startTrip);
+        endTripBtn.addEventListener('click', endTrip);
+
+        tripVehicleSelect.addEventListener('change', () => {
+            confirmVehicleBtn.disabled = !tripVehicleSelect.value;
+        });
+
+        // Iniciar polling de conexión OBD cada 5 segundos
+        obdConnectionCheckInterval = setInterval(checkOBDConnection, 5000);
+        checkOBDConnection(); // Check inmediato al cargar
+    }
 
     // === TRACKING DE VIAJE ACTUAL - FASE 2 v10.0 ===
 
@@ -1739,11 +2297,12 @@ document.addEventListener('DOMContentLoaded', () => {
     console.log('  ✓ Análisis salud automático cada 90s');
 
     initModeSelector();
+    initTripManagement(); // Fase 4 - Sistema de gestión de viajes
     loadVehicleInfo();
     loadMaintenanceLog();
     updateAnalyzeButton();
     loadUploadedCSVs();
-    
+
     // Polling de datos OBD
     fetchLiveData();
     setInterval(fetchLiveData, POLL_INTERVAL);

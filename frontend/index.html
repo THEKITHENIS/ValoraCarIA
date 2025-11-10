@@ -121,6 +121,103 @@
             </div>
         </div>
 
+        <!-- CONTROL DE VIAJE Y CONEXIÓN OBD -->
+        <div class="card" id="tripControlCard">
+            <h2>
+                <i class="fas fa-route"></i>
+                Control de Viaje
+            </h2>
+
+            <!-- Estado de conexión OBD -->
+            <div class="connection-status" id="obdConnectionStatus">
+                <div class="status-indicator" id="statusIndicator">
+                    <i class="fas fa-circle"></i>
+                    <span>Buscando adaptador OBD...</span>
+                </div>
+            </div>
+
+            <!-- Sección: Seleccionar Vehículo -->
+            <div id="vehicleSelectionSection" style="display: none;">
+                <div class="info-box info-warning">
+                    <i class="fas fa-info-circle"></i>
+                    <p>Se ha detectado una conexión OBD. Selecciona el vehículo que vas a conducir:</p>
+                </div>
+                <div class="form-group">
+                    <label for="tripVehicleSelect">
+                        <i class="fas fa-car"></i> Vehículo
+                    </label>
+                    <select id="tripVehicleSelect">
+                        <option value="">-- Selecciona un vehículo --</option>
+                    </select>
+                </div>
+                <button id="confirmVehicleBtn" class="btn btn-primary" disabled>
+                    <i class="fas fa-check"></i> Confirmar Vehículo
+                </button>
+            </div>
+
+            <!-- Información del vehículo conectado -->
+            <div id="connectedVehicleCard" style="display: none;">
+                <div class="connected-vehicle-info">
+                    <div class="vehicle-info">
+                        <i class="fas fa-car"></i>
+                        <div>
+                            <strong id="connectedVehicleName">--</strong>
+                            <span id="connectedVehicleDetails">--</span>
+                        </div>
+                    </div>
+                    <button id="changeVehicleBtn" class="btn btn-sm btn-secondary">
+                        <i class="fas fa-exchange-alt"></i> Cambiar
+                    </button>
+                </div>
+            </div>
+
+            <!-- Botones de control de viaje -->
+            <div id="tripControlButtons" style="display: none;">
+                <button id="startTripBtn" class="btn btn-trip btn-trip-start">
+                    <i class="fas fa-play"></i>
+                    <strong>INICIAR VIAJE</strong>
+                    <small>Comenzar grabación de datos</small>
+                </button>
+
+                <button id="endTripBtn" class="btn btn-trip btn-trip-end" style="display: none;">
+                    <i class="fas fa-stop"></i>
+                    <strong>FINALIZAR VIAJE</strong>
+                    <small>Detener y guardar datos</small>
+                </button>
+            </div>
+
+            <!-- Indicador de viaje activo -->
+            <div id="tripActiveBanner" class="trip-active-banner" style="display: none;">
+                <div class="recording-indicator">
+                    <span class="recording-dot"></span>
+                    <strong>VIAJE EN CURSO</strong>
+                </div>
+                <div class="trip-info">
+                    <div class="trip-stat">
+                        <i class="fas fa-clock"></i>
+                        <span id="tripDuration">00:00:00</span>
+                    </div>
+                    <div class="trip-stat">
+                        <i class="fas fa-route"></i>
+                        <span id="tripDistance">0.0 km</span>
+                    </div>
+                    <div class="trip-stat">
+                        <i class="fas fa-database"></i>
+                        <span id="tripDataPoints">0 datos</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Advertencia de cambio de vehículo -->
+            <div id="vehicleChangeWarning" class="info-box info-danger" style="display: none;">
+                <i class="fas fa-exclamation-triangle"></i>
+                <p>
+                    <strong>⚠️ ADVERTENCIA:</strong> Se detectó un vehículo diferente conectado.
+                    El viaje actual se finalizará automáticamente.
+                </p>
+            </div>
+        </div>
+
         <!-- SECCIÓN 1: CONFIGURACIÓN DEL VEHÍCULO -->
         <div class="card" id="vehicleConfigCard">
             <h2>

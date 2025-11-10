@@ -428,6 +428,48 @@ def get_health_history():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route("/api/health", methods=["GET"])
+def get_obd_health():
+    """
+    Endpoint para verificar el estado de conexión OBD
+    Retorna información sobre si el adaptador está conectado y el VIN del vehículo
+    """
+    try:
+        # Verificar si el adaptador OBD está conectado
+        obd_connected = connection is not None and hasattr(connection, 'is_connected') and connection.is_connected()
+
+        # Intentar obtener VIN si está conectado
+        vehicle_vin = None
+        if obd_connected:
+            try:
+                # Intentar obtener VIN del vehículo conectado
+                # Nota: Esto es opcional y depende de si el adaptador soporta este comando
+                if hasattr(connection, 'query'):
+                    vin_cmd = obd.commands.VIN
+                    if vin_cmd:
+                        response = connection.query(vin_cmd)
+                        if response and not response.is_null():
+                            vehicle_vin = str(response.value)
+            except Exception as vin_error:
+                print(f"[HEALTH] No se pudo obtener VIN: {vin_error}")
+
+        return jsonify({
+            "obd_connected": obd_connected,
+            "vehicle_vin": vehicle_vin,
+            "server_running": True,
+            "timestamp": datetime.now().isoformat()
+        })
+
+    except Exception as e:
+        print(f"[API] Error en endpoint health: {e}")
+        return jsonify({
+            "obd_connected": False,
+            "vehicle_vin": None,
+            "server_running": True,
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }), 200  # Retornar 200 aunque haya error para que el frontend sepa que el servidor está vivo
+
 @app.route("/predictive_analysis", methods=["POST"])
 def predictive_analysis():
     global model, trip_data
