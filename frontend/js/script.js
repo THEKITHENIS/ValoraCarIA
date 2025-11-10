@@ -1845,7 +1845,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 body: JSON.stringify({
                     vehicle_info: vehicleInfo,
                     trip_data: currentTripData,
-                    transmission: transmission
+                    transmission: transmission,
+                    vehicle_id: activeVehicleId || null  // Añadir vehicle_id para análisis completo con todos los PIDs
                 })
             });
 
