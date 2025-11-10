@@ -395,6 +395,9 @@
 
     <script src="js/common.js"></script>
     <script>
+        // API Configuration
+        const API_URL = 'http://localhost:5000';
+
         document.addEventListener('DOMContentLoaded', async () => {
             console.log('[VEHICLE-DETAIL] Iniciado');
 
@@ -627,10 +630,14 @@
 
             // Cargar mantenimiento
             async function loadMaintenance() {
+                console.log('[MAINTENANCE] Loading maintenance for vehicle:', vehicleId);
                 try {
                     const data = await SENTINEL.API.get(`/api/vehicles/${vehicleId}/maintenance`);
+                    console.log('[MAINTENANCE] Data received:', data);
                     if (data.success) {
                         displayMaintenance(data.maintenance || []);
+                    } else {
+                        console.error('[MAINTENANCE] Request failed:', data);
                     }
                 } catch (error) {
                     console.error('[MAINTENANCE] Error:', error);
@@ -639,6 +646,7 @@
 
             // Mostrar mantenimiento
             function displayMaintenance(maintenance) {
+                console.log('[MAINTENANCE] Displaying', maintenance.length, 'records');
                 const list = document.getElementById('maintenanceList');
 
                 if (maintenance.length === 0) {
@@ -797,7 +805,10 @@
                         // Manejar cambio de vehículo
                         selector.addEventListener('change', (e) => {
                             const newVehicleId = e.target.value;
+                            console.log('[VEHICLE-SELECTOR] Vehicle changed from', vehicleId, 'to', newVehicleId);
                             if (newVehicleId && newVehicleId != vehicleId) {
+                                console.log('[VEHICLE-SELECTOR] Redirecting to new vehicle...');
+                                // Forzar recarga completa para actualizar todos los datos
                                 window.location.href = `vehicle-detail.html?id=${newVehicleId}`;
                             }
                         });
@@ -813,10 +824,11 @@
              * Análisis General del Vehículo
              */
             async function analyzeGeneral() {
+                console.log('[AI-GENERAL] Iniciando análisis...');
                 SENTINEL.Toast.info('Analizando vehículo con IA...');
 
                 try {
-                    const response = await fetch('http://localhost:5000/api/ai/analyze-vehicle-history', {
+                    const response = await fetch(`${API_URL}/api/ai/analyze-vehicle-history`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
@@ -825,14 +837,21 @@
                         })
                     });
 
-                    if (!response.ok) throw new Error('Error en análisis');
+                    console.log('[AI-GENERAL] Response status:', response.status);
+
+                    if (!response.ok) {
+                        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+                        throw new Error(errorData.error || 'Error en análisis');
+                    }
 
                     const analysis = await response.json();
+                    console.log('[AI-GENERAL] Analysis received:', analysis);
                     displayGeneralAnalysis(analysis);
+                    SENTINEL.Toast.success('Análisis completado');
 
                 } catch (error) {
                     console.error('[AI-GENERAL] Error:', error);
-                    SENTINEL.Toast.error('Error al analizar el vehículo');
+                    SENTINEL.Toast.error('Error al analizar el vehículo: ' + error.message);
                 }
             }
 
@@ -840,12 +859,18 @@
              * Predicción de Averías
              */
             async function analyzeFailures() {
-                if (!vehicleData) return;
+                console.log('[AI-FAILURES] Iniciando análisis de averías...');
+
+                if (!vehicleData) {
+                    console.error('[AI-FAILURES] No vehicle data available');
+                    SENTINEL.Toast.error('Datos del vehículo no disponibles');
+                    return;
+                }
 
                 SENTINEL.Toast.info('Buscando averías comunes...');
 
                 try {
-                    const response = await fetch('http://localhost:5000/api/ai/common-failures', {
+                    const response = await fetch(`${API_URL}/api/ai/common-failures`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
@@ -856,14 +881,21 @@
                         })
                     });
 
-                    if (!response.ok) throw new Error('Error en análisis');
+                    console.log('[AI-FAILURES] Response status:', response.status);
+
+                    if (!response.ok) {
+                        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+                        throw new Error(errorData.error || 'Error en análisis');
+                    }
 
                     const analysis = await response.json();
+                    console.log('[AI-FAILURES] Analysis received:', analysis);
                     displayFailuresAnalysis(analysis);
+                    SENTINEL.Toast.success('Análisis completado');
 
                 } catch (error) {
                     console.error('[AI-FAILURES] Error:', error);
-                    SENTINEL.Toast.error('Error al buscar averías');
+                    SENTINEL.Toast.error('Error al buscar averías: ' + error.message);
                 }
             }
 
@@ -871,12 +903,18 @@
              * Valoración del Vehículo
              */
             async function analyzeValuation() {
-                if (!vehicleData) return;
+                console.log('[AI-VALUATION] Iniciando valoración...');
+
+                if (!vehicleData) {
+                    console.error('[AI-VALUATION] No vehicle data available');
+                    SENTINEL.Toast.error('Datos del vehículo no disponibles');
+                    return;
+                }
 
                 SENTINEL.Toast.info('Calculando valoración...');
 
                 try {
-                    const response = await fetch('http://localhost:5000/api/ai/valuation', {
+                    const response = await fetch(`${API_URL}/api/ai/valuation`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
@@ -888,14 +926,21 @@
                         })
                     });
 
-                    if (!response.ok) throw new Error('Error en valoración');
+                    console.log('[AI-VALUATION] Response status:', response.status);
+
+                    if (!response.ok) {
+                        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+                        throw new Error(errorData.error || 'Error en valoración');
+                    }
 
                     const valuation = await response.json();
+                    console.log('[AI-VALUATION] Valuation received:', valuation);
                     displayValuationAnalysis(valuation);
+                    SENTINEL.Toast.success('Valoración completada');
 
                 } catch (error) {
                     console.error('[AI-VALUATION] Error:', error);
-                    SENTINEL.Toast.error('Error al calcular valoración');
+                    SENTINEL.Toast.error('Error al calcular valoración: ' + error.message);
                 }
             }
 
@@ -1064,10 +1109,15 @@
             await loadVehicleSelector();
 
             // Habilitar botones IA después de cargar datos
+            console.log('[VEHICLE-DETAIL] vehicleData loaded:', vehicleData ? 'YES' : 'NO');
             if (vehicleData) {
+                console.log('[VEHICLE-DETAIL] Enabling AI buttons...');
                 document.getElementById('aiGeneralBtn').disabled = false;
                 document.getElementById('aiFailuresBtn').disabled = false;
                 document.getElementById('aiValuationBtn').disabled = false;
+                console.log('[VEHICLE-DETAIL] AI buttons enabled');
+            } else {
+                console.error('[VEHICLE-DETAIL] Cannot enable AI buttons - no vehicle data');
             }
         });
 
