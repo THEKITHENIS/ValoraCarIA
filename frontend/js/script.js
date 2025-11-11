@@ -276,10 +276,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Cargar datos del vehículo seleccionado
     async function loadVehicleData(vehicleId) {
+        console.log('[LOAD-VEHICLE] Cargando vehículo ID:', vehicleId);
+
         try {
             const response = await fetch(`${API_URL}/api/vehicles/${vehicleId}`);
             const data = await response.json();
             const vehicle = data.vehicle || data;
+
+            console.log('[LOAD-VEHICLE] Vehículo recibido:', vehicle);
 
             // Rellenar formulario
             if (vehicleBrand) vehicleBrand.value = vehicle.brand || '';
@@ -295,11 +299,15 @@ document.addEventListener('DOMContentLoaded', () => {
             localStorage.setItem('activeVehicleId', vehicleId);
             saveVehicleInfo();
 
+            // ⭐ IMPORTANTE: Recargar historial de mantenimiento para este vehículo
+            console.log('[LOAD-VEHICLE] Recargando historial de mantenimiento...');
+            loadMaintenanceLog();
+
             if (window.SENTINEL && window.SENTINEL.Toast) {
                 window.SENTINEL.Toast.success('Vehículo cargado correctamente');
             }
         } catch (error) {
-            console.error('Error cargando vehículo:', error);
+            console.error('[LOAD-VEHICLE] Error cargando vehículo:', error);
             if (window.SENTINEL && window.SENTINEL.Toast) {
                 window.SENTINEL.Toast.error('Error al cargar el vehículo');
             }
