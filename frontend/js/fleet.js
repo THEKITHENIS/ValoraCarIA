@@ -487,28 +487,57 @@ document.addEventListener('DOMContentLoaded', async () => {
      * Analizar vehículo con IA (FASE 2 - v10.0)
      */
     async function analyzeFleetVehicle(vehicleId) {
-        SENTINEL.Toast.info('Analizando vehículo con IA...');
+        const vehicle = allVehicles.find(v => v.id === vehicleId);
+        const vehicleName = vehicle ? `${vehicle.brand} ${vehicle.model}` : 'Vehículo';
+
+        console.log('[FLEET-AI] Iniciando análisis para:', vehicleName, 'ID:', vehicleId);
+
+        if (!vehicleId) {
+            SENTINEL.Toast.error('ID de vehículo inválido');
+            return;
+        }
+
+        SENTINEL.Toast.info(`Analizando ${vehicleName} con IA...`);
+
+        // Mostrar modal de loading
+        const loadingModal = showLoadingModal('Analizando vehículo con IA...', 'Esto puede tardar unos segundos...');
 
         try {
-            const response = await fetch(`${SENTINEL.API.BASE_URL}/api/ai/analyze-vehicle-history`, {
+            const response = await fetch(`${SENTINEL.CONFIG.API_URL}/api/ai/analyze-vehicle-history`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    vehicle_id: vehicleId,
+                    vehicle_id: parseInt(vehicleId),
                     include_predictions: true
                 })
             });
 
+            console.log('[FLEET-AI] Response status:', response.status);
+
             if (!response.ok) {
-                throw new Error('Error en análisis');
+                const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+                throw new Error(errorData.error || `Error ${response.status}`);
             }
 
             const analysis = await response.json();
+            console.log('[FLEET-AI] Analysis received:', analysis);
+
+            // Cerrar loading
+            loadingModal.remove();
+
+            // Mostrar resultados
             showAIAnalysisModal(analysis, vehicleId);
 
+            SENTINEL.Toast.success('Análisis completado');
+
         } catch (error) {
-            console.error('[FLEET-AI] Error:', error);
-            SENTINEL.Toast.error('Error al analizar el vehículo');
+            console.error('[FLEET-AI] Error completo:', error);
+            loadingModal.remove();
+            SENTINEL.Toast.error('Error al analizar: ' + error.message);
+
+            // Mostrar modal de error con detalles
+            showErrorModal('Error en Análisis IA', error.message,
+                'Verifica que el servidor backend esté ejecutándose y que la API de Gemini esté configurada correctamente.');
         }
     }
 
@@ -675,6 +704,73 @@ document.addEventListener('DOMContentLoaded', async () => {
     function capitalizeFirst(str) {
         if (!str) return '';
         return str.charAt(0).toUpperCase() + str.slice(1);
+    }
+
+    /**
+     * Mostrar modal de loading
+     */
+    function showLoadingModal(title, message) {
+        const modal = document.createElement('div');
+        modal.className = 'modal-overlay';
+        modal.innerHTML = `
+            <div class="modal-content modal-small">
+                <div class="modal-body" style="text-align: center; padding: 3rem;">
+                    <div class="spinner" style="width: 50px; height: 50px; border: 4px solid rgba(59, 130, 246, 0.1); border-top-color: #3b82f6; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto;"></div>
+                    <h3 style="margin-top: 1.5rem; color: var(--text-primary);">${title}</h3>
+                    <p style="color: var(--text-secondary); margin-top: 0.5rem;">${message}</p>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+        setTimeout(() => modal.classList.add('show'), 10);
+        return modal;
+    }
+
+    /**
+     * Mostrar modal de error
+     */
+    function showErrorModal(title, error, suggestion) {
+        const modal = document.createElement('div');
+        modal.className = 'modal-overlay';
+        modal.innerHTML = `
+            <div class="modal-content modal-small">
+                <div class="modal-header">
+                    <h2><i class="fas fa-exclamation-circle" style="color: #ef4444;"></i> ${title}</h2>
+                    <button class="modal-close">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-danger">
+                        <i class="fas fa-times-circle"></i>
+                        <div>
+                            <strong>Error:</strong>
+                            <p>${error}</p>
+                        </div>
+                    </div>
+                    ${suggestion ? `
+                        <p style="color: var(--text-secondary); margin-top: 1rem;">
+                            <i class="fas fa-info-circle"></i> ${suggestion}
+                        </p>
+                    ` : ''}
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary modal-close-btn">
+                        <i class="fas fa-times"></i> Cerrar
+                    </button>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
+        setTimeout(() => modal.classList.add('show'), 10);
+
+        const closeModal = () => modal.remove();
+        modal.querySelector('.modal-close').addEventListener('click', closeModal);
+        modal.querySelector('.modal-close-btn').addEventListener('click', closeModal);
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) closeModal();
+        });
+
+        return modal;
     }
 
     // === EVENT LISTENERS ===

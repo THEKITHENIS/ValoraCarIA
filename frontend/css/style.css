@@ -2194,17 +2194,176 @@ footer p {
     color: var(--danger);
 }
 
+/* ============================================================================
+   CORRECCIÓN GLOBAL DE COLORES - LEGIBILIDAD ASEGURADA
+   ============================================================================ */
+
+/* Forzar colores claros en TODOS los textos básicos */
+p, span, div, a, label, li, td, th, small, strong, em, b, i {
+    color: var(--text-primary, #f1f5f9);
+}
+
+/* Headers siempre visibles */
+h1, h2, h3, h4, h5, h6 {
+    color: var(--text-primary, #f1f5f9) !important;
+}
+
+/* Links siempre visibles */
+a {
+    color: var(--primary, #3b82f6);
+}
+
+a:hover {
+    color: #60a5fa;
+}
+
+/* Navegación */
+nav, .nav, .navbar, .menu, .main-nav {
+    background: var(--bg-card, #1e293b);
+}
+
+nav a, .nav a, .navbar a, .menu a, .main-nav a {
+    color: var(--text-primary, #f1f5f9) !important;
+}
+
+nav a:hover, .nav a:hover, .navbar a:hover, .menu a:hover, .main-nav a:hover {
+    color: var(--primary, #3b82f6) !important;
+}
+
+/* Sidebar */
+.sidebar {
+    background: var(--bg-card, #1e293b);
+}
+
+.sidebar a {
+    color: var(--text-primary, #f1f5f9) !important;
+}
+
+.sidebar a:hover, .sidebar a.active {
+    color: var(--primary, #3b82f6) !important;
+}
+
+/* Cards */
+.card h1, .card h2, .card h3, .card h4, .card h5, .card h6 {
+    color: var(--text-primary, #f1f5f9) !important;
+}
+
+/* Tablas */
+table {
+    color: var(--text-primary, #f1f5f9);
+}
+
+thead {
+    background: rgba(59, 130, 246, 0.1);
+}
+
+th {
+    color: var(--text-primary, #f1f5f9) !important;
+}
+
+td {
+    color: var(--text-secondary, #cbd5e1);
+}
+
+/* Inputs y selects - legibles */
+input, select, textarea {
+    background: var(--bg-dark, #0f172a) !important;
+    color: var(--text-primary, #f1f5f9) !important;
+    border: 2px solid var(--border, #334155);
+}
+
+input::placeholder, textarea::placeholder {
+    color: var(--text-muted, #64748b) !important;
+}
+
+/* Botones siempre legibles */
+.btn {
+    color: white !important;
+}
+
+/* Modales */
+.modal-header h2 {
+    color: var(--text-primary, #f1f5f9) !important;
+}
+
+/* Dropdown menus */
+.dropdown-menu {
+    background: var(--bg-card, #1e293b);
+}
+
+.dropdown-menu a {
+    color: var(--text-primary, #f1f5f9) !important;
+}
+
+.dropdown-menu a:hover {
+    background: rgba(59, 130, 246, 0.1);
+    color: var(--primary, #3b82f6) !important;
+}
+
+/* Forms */
+.form-group label, .form-label {
+    color: var(--text-primary, #f1f5f9) !important;
+}
+
+/* Stats y métricas */
+.stat-value, .kpi-value {
+    color: var(--text-primary, #f1f5f9) !important;
+}
+
+.stat-label, .kpi-label {
+    color: var(--text-secondary, #cbd5e1) !important;
+}
+
+/* Breadcrumbs */
+.breadcrumb {
+    background: transparent;
+}
+
+.breadcrumb a {
+    color: var(--text-secondary, #cbd5e1) !important;
+}
+
+.breadcrumb a:hover {
+    color: var(--primary, #3b82f6) !important;
+}
+
+/* Tooltips */
+.tooltip {
+    background: var(--bg-dark, #0f172a);
+    color: var(--text-primary, #f1f5f9);
+    border: 1px solid var(--border, #334155);
+}
+
+/* Loading text */
+.loading-text, .no-data {
+    color: var(--text-secondary, #cbd5e1) !important;
+}
+
+/* Badges siempre visibles */
+.badge {
+    color: white !important;
+}
+
+/* Spinner animation */
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.spinner {
+    animation: spin 1s linear infinite;
+}
+
 /* === RESPONSIVE === */
 @media (max-width: 768px) {
     .ai-actions {
         grid-template-columns: 1fr;
     }
-    
+
     .modal-content {
         width: 95%;
         max-height: 95vh;
     }
-    
+
     .status-indicator {
         font-size: 0.8rem;
     }
