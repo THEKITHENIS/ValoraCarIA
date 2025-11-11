@@ -2353,6 +2353,225 @@ input::placeholder, textarea::placeholder {
     animation: spin 1s linear infinite;
 }
 
+/* ============================================================================
+   CONTROL DE VIAJE - DASHBOARD
+   ============================================================================ */
+
+.connection-status {
+    margin: 1.5rem 0;
+}
+
+.status-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1.25rem;
+    border-radius: 12px;
+    transition: all 0.3s ease;
+    border: 2px solid;
+}
+
+.status-indicator.searching {
+    border-color: #fbbf24;
+    background: rgba(251, 191, 36, 0.1);
+}
+
+.status-indicator.searching i {
+    color: #fbbf24;
+    animation: pulse 2s infinite;
+}
+
+.status-indicator.connected {
+    border-color: #10b981;
+    background: rgba(16, 185, 129, 0.1);
+}
+
+.status-indicator.connected i {
+    color: #10b981;
+    animation: pulse 2s infinite;
+}
+
+.status-indicator.disconnected {
+    border-color: #ef4444;
+    background: rgba(239, 68, 68, 0.1);
+}
+
+.status-indicator.disconnected i {
+    color: #ef4444;
+}
+
+.status-detail {
+    display: block;
+    margin-top: 0.5rem;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+}
+
+.trip-vehicle-actions {
+    display: flex;
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+.trip-vehicle-actions .btn {
+    flex: 1;
+}
+
+/* Tarjeta de vehículo conectado (estilo fleet) */
+.vehicle-card-connected {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    padding: 1.5rem;
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(5, 150, 105, 0.05) 100%);
+    border: 2px solid #10b981;
+    border-radius: 12px;
+    margin: 1.5rem 0;
+}
+
+.vehicle-card-image {
+    width: 80px;
+    height: 80px;
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.vehicle-card-image i {
+    font-size: 2.5rem;
+    color: white;
+}
+
+.vehicle-card-info {
+    flex: 1;
+}
+
+.vehicle-card-info h3 {
+    margin: 0 0 0.5rem 0;
+    color: var(--text-primary);
+    font-size: 1.3rem;
+}
+
+.vehicle-card-specs {
+    display: flex;
+    gap: 0.5rem;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    margin-bottom: 0.5rem;
+}
+
+.vehicle-card-details {
+    display: flex;
+    gap: 1rem;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+}
+
+.vehicle-card-details span {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+/* Botones de control de viaje */
+.trip-controls {
+    display: flex;
+    gap: 1rem;
+    margin: 1.5rem 0;
+}
+
+.btn-trip {
+    flex: 1;
+    padding: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    font-size: 1rem;
+}
+
+.btn-trip i {
+    font-size: 2rem;
+}
+
+.btn-trip-content {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.25rem;
+}
+
+.btn-trip-content strong {
+    font-size: 1.1rem;
+}
+
+.btn-trip-content small {
+    font-size: 0.85rem;
+    font-weight: normal;
+    opacity: 0.8;
+}
+
+/* Banner de viaje activo */
+.trip-active-banner {
+    padding: 1.5rem;
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.1) 0%, rgba(220, 38, 38, 0.05) 100%);
+    border: 2px solid #ef4444;
+    border-radius: 12px;
+    margin-top: 1rem;
+    animation: pulseGlow 2s infinite;
+}
+
+@keyframes pulseGlow {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+    50% { box-shadow: 0 0 0 8px rgba(239, 68, 68, 0); }
+}
+
+.recording-indicator {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+.recording-dot {
+    width: 16px;
+    height: 16px;
+    background: #ef4444;
+    border-radius: 50%;
+    animation: pulse 2s infinite;
+}
+
+.recording-indicator strong {
+    color: #ef4444;
+    font-size: 1.1rem;
+}
+
+.trip-stats {
+    display: flex;
+    gap: 2rem;
+    flex-wrap: wrap;
+}
+
+.trip-stat {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--text-secondary);
+}
+
+.trip-stat i {
+    color: #ef4444;
+}
+
+/* Modal crear vehículo */
+.form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+}
+
 /* === RESPONSIVE === */
 @media (max-width: 768px) {
     .ai-actions {
@@ -2366,5 +2585,27 @@ input::placeholder, textarea::placeholder {
 
     .status-indicator {
         font-size: 0.8rem;
+    }
+
+    .trip-controls {
+        flex-direction: column;
+    }
+
+    .trip-vehicle-actions {
+        flex-direction: column;
+    }
+
+    .vehicle-card-connected {
+        flex-direction: column;
+        text-align: center;
+    }
+
+    .trip-stats {
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .form-row {
+        grid-template-columns: 1fr;
     }
 }
