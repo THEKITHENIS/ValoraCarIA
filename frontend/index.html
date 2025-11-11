@@ -129,92 +129,184 @@
             </h2>
 
             <!-- Estado de conexión OBD -->
-            <div class="connection-status" id="obdConnectionStatus">
-                <div class="status-indicator" id="statusIndicator">
+            <div class="connection-status">
+                <div class="status-indicator searching" id="obdStatusIndicator">
                     <i class="fas fa-circle"></i>
-                    <span>Buscando adaptador OBD...</span>
+                    <span id="obdStatusText">Buscando adaptador OBD...</span>
                 </div>
+                <small id="obdStatusDetail" class="status-detail">
+                    Verifica que el adaptador esté conectado y el motor encendido
+                </small>
             </div>
 
-            <!-- Sección: Seleccionar Vehículo -->
-            <div id="vehicleSelectionSection" style="display: none;">
-                <div class="info-box info-warning">
+            <!-- Selector de vehículo (SE MUESTRA cuando OBD conecta) -->
+            <div id="tripVehicleSection" style="display: none;">
+                <div class="alert alert-info">
                     <i class="fas fa-info-circle"></i>
-                    <p>Se ha detectado una conexión OBD. Selecciona el vehículo que vas a conducir:</p>
+                    <div>
+                        <strong>Adaptador OBD conectado</strong>
+                        <p>Selecciona el vehículo que estás conduciendo o crea uno nuevo:</p>
+                    </div>
                 </div>
+
                 <div class="form-group">
                     <label for="tripVehicleSelect">
-                        <i class="fas fa-car"></i> Vehículo
+                        <i class="fas fa-car"></i> Vehículo conectado
                     </label>
-                    <select id="tripVehicleSelect">
-                        <option value="">-- Selecciona un vehículo --</option>
+                    <select id="tripVehicleSelect" class="form-control">
+                        <option value="">Cargando vehículos...</option>
                     </select>
                 </div>
-                <button id="confirmVehicleBtn" class="btn btn-primary" disabled>
-                    <i class="fas fa-check"></i> Confirmar Vehículo
-                </button>
-            </div>
 
-            <!-- Información del vehículo conectado -->
-            <div id="connectedVehicleCard" style="display: none;">
-                <div class="connected-vehicle-info">
-                    <div class="vehicle-info">
-                        <i class="fas fa-car"></i>
-                        <div>
-                            <strong id="connectedVehicleName">--</strong>
-                            <span id="connectedVehicleDetails">--</span>
-                        </div>
-                    </div>
-                    <button id="changeVehicleBtn" class="btn btn-sm btn-secondary">
-                        <i class="fas fa-exchange-alt"></i> Cambiar
+                <div class="trip-vehicle-actions">
+                    <button id="confirmVehicleBtn" class="btn btn-success" disabled>
+                        <i class="fas fa-check-circle"></i>
+                        Confirmar Vehículo
+                    </button>
+
+                    <button id="createNewVehicleBtn" class="btn btn-secondary">
+                        <i class="fas fa-plus-circle"></i>
+                        Crear Nuevo Vehículo
                     </button>
                 </div>
             </div>
 
-            <!-- Botones de control de viaje -->
-            <div id="tripControlButtons" style="display: none;">
-                <button id="startTripBtn" class="btn btn-trip btn-trip-start">
-                    <i class="fas fa-play"></i>
-                    <strong>INICIAR VIAJE</strong>
-                    <small>Comenzar grabación de datos</small>
-                </button>
-
-                <button id="endTripBtn" class="btn btn-trip btn-trip-end" style="display: none;">
-                    <i class="fas fa-stop"></i>
-                    <strong>FINALIZAR VIAJE</strong>
-                    <small>Detener y guardar datos</small>
-                </button>
-            </div>
-
-            <!-- Indicador de viaje activo -->
-            <div id="tripActiveBanner" class="trip-active-banner" style="display: none;">
-                <div class="recording-indicator">
-                    <span class="recording-dot"></span>
-                    <strong>VIAJE EN CURSO</strong>
+            <!-- Tarjeta de vehículo conectado (SE MUESTRA después de confirmar) -->
+            <div id="connectedVehicleCard" style="display: none;">
+                <div class="vehicle-card-connected">
+                    <div class="vehicle-card-image">
+                        <i class="fas fa-car"></i>
+                    </div>
+                    <div class="vehicle-card-info">
+                        <h3 id="connectedVehicleName">-</h3>
+                        <div class="vehicle-card-specs">
+                            <span id="connectedVehicleYear">-</span>
+                            <span>•</span>
+                            <span id="connectedVehicleFuel">-</span>
+                            <span>•</span>
+                            <span id="connectedVehicleTransmission">-</span>
+                        </div>
+                        <div class="vehicle-card-details">
+                            <span><i class="fas fa-tachometer-alt"></i> <span id="connectedVehicleMileage">-</span> km</span>
+                            <span><i class="fas fa-barcode"></i> <span id="connectedVehicleVIN">-</span></span>
+                        </div>
+                    </div>
+                    <button id="changeVehicleBtn" class="btn btn-secondary btn-sm">
+                        <i class="fas fa-exchange-alt"></i>
+                        Cambiar
+                    </button>
                 </div>
-                <div class="trip-info">
-                    <div class="trip-stat">
-                        <i class="fas fa-clock"></i>
-                        <span id="tripDuration">00:00:00</span>
+
+                <!-- Botones de control de viaje -->
+                <div class="trip-controls">
+                    <button id="startTripBtn" class="btn btn-success btn-trip">
+                        <i class="fas fa-play-circle"></i>
+                        <div class="btn-trip-content">
+                            <strong>Iniciar Viaje</strong>
+                            <small>Comenzar grabación de datos OBD</small>
+                        </div>
+                    </button>
+
+                    <button id="endTripBtn" class="btn btn-danger btn-trip" style="display: none;">
+                        <i class="fas fa-stop-circle"></i>
+                        <div class="btn-trip-content">
+                            <strong>Finalizar Viaje</strong>
+                            <small id="tripDurationDisplay">00:00:00</small>
+                        </div>
+                    </button>
+                </div>
+
+                <!-- Banner de viaje activo -->
+                <div id="tripActiveBanner" class="trip-active-banner" style="display: none;">
+                    <div class="recording-indicator">
+                        <div class="recording-dot"></div>
+                        <strong>VIAJE EN CURSO</strong>
                     </div>
-                    <div class="trip-stat">
-                        <i class="fas fa-route"></i>
-                        <span id="tripDistance">0.0 km</span>
-                    </div>
-                    <div class="trip-stat">
-                        <i class="fas fa-database"></i>
-                        <span id="tripDataPoints">0 datos</span>
+                    <div class="trip-stats">
+                        <div class="trip-stat">
+                            <i class="fas fa-clock"></i>
+                            <span id="activeTripDuration">00:00:00</span>
+                        </div>
+                        <div class="trip-stat">
+                            <i class="fas fa-route"></i>
+                            <span id="activeTripDistance">0.0 km</span>
+                        </div>
+                        <div class="trip-stat">
+                            <i class="fas fa-database"></i>
+                            <span id="activeTripDataPoints">0</span> registros
+                        </div>
                     </div>
                 </div>
             </div>
+        </div>
 
-            <!-- Advertencia de cambio de vehículo -->
-            <div id="vehicleChangeWarning" class="info-box info-danger" style="display: none;">
-                <i class="fas fa-exclamation-triangle"></i>
-                <p>
-                    <strong>⚠️ ADVERTENCIA:</strong> Se detectó un vehículo diferente conectado.
-                    El viaje actual se finalizará automáticamente.
-                </p>
+        <!-- Modal: Crear Nuevo Vehículo (cuando no está en lista) -->
+        <div id="modalCreateVehicle" class="modal-overlay" style="display: none;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2><i class="fas fa-plus-circle"></i> Crear Nuevo Vehículo</h2>
+                    <button class="modal-close" onclick="closeCreateVehicleModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <form id="quickCreateVehicleForm">
+                        <div class="form-group">
+                            <label>Marca *</label>
+                            <input type="text" id="quickVehicleBrand" required placeholder="Ej: Seat">
+                        </div>
+
+                        <div class="form-group">
+                            <label>Modelo *</label>
+                            <input type="text" id="quickVehicleModel" required placeholder="Ej: León 2.0 TDI">
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Año *</label>
+                                <input type="number" id="quickVehicleYear" required min="1990" max="2025" placeholder="2018">
+                            </div>
+
+                            <div class="form-group">
+                                <label>Kilometraje</label>
+                                <input type="number" id="quickVehicleMileage" placeholder="150000">
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Combustible *</label>
+                                <select id="quickVehicleFuel" required>
+                                    <option value="">Seleccionar...</option>
+                                    <option value="Diesel">Diesel</option>
+                                    <option value="Gasolina">Gasolina</option>
+                                    <option value="Híbrido">Híbrido</option>
+                                    <option value="Eléctrico">Eléctrico</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Transmisión *</label>
+                                <select id="quickVehicleTransmission" required>
+                                    <option value="">Seleccionar...</option>
+                                    <option value="Manual">Manual</option>
+                                    <option value="Automático">Automático</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label>VIN (opcional)</label>
+                            <input type="text" id="quickVehicleVIN" placeholder="WVWZZZ1KZXW123456" maxlength="17">
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeCreateVehicleModal()">
+                        <i class="fas fa-times"></i> Cancelar
+                    </button>
+                    <button type="button" class="btn btn-success" onclick="saveQuickVehicle()">
+                        <i class="fas fa-check"></i> Crear y Conectar
+                    </button>
+                </div>
             </div>
         </div>
 
