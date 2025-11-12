@@ -195,6 +195,62 @@ class DatabaseManager:
                 )
             ''')
 
+            # Tabla de datos OBD extendidos (OBDb) - NO MODIFICAR obd_data original
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS obd_extended (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    trip_id INTEGER NOT NULL,
+                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+                    -- Fuel system
+                    fuel_trim_short_1 REAL,
+                    fuel_trim_long_1 REAL,
+                    fuel_trim_short_2 REAL,
+                    fuel_trim_long_2 REAL,
+                    fuel_system_status TEXT,
+                    fuel_level REAL,
+
+                    -- O2 sensors
+                    o2_b1s1 REAL,
+                    o2_b1s2 REAL,
+                    o2_b2s1 REAL,
+                    o2_b2s2 REAL,
+                    lambda_b1s1 REAL,
+                    lambda_b1s2 REAL,
+
+                    -- Emissions
+                    egr_commanded REAL,
+                    egr_error REAL,
+                    evap_purge REAL,
+                    evap_vapor_pressure REAL,
+
+                    -- Exhaust
+                    exhaust_temp_b1s1 REAL,
+                    exhaust_temp_b1s2 REAL,
+                    exhaust_temp_b2s1 REAL,
+                    exhaust_temp_b2s2 REAL,
+                    catalyst_temp_b1s1 REAL,
+                    catalyst_temp_b2s1 REAL,
+
+                    -- DPF (diesel)
+                    dpf_temperature REAL,
+                    dpf_pressure REAL,
+                    dpf_soot_load REAL,
+
+                    -- Battery (hybrid/electric)
+                    battery_voltage REAL,
+                    battery_current REAL,
+                    battery_soc REAL,
+
+                    -- Diagnostics
+                    mil_status BOOLEAN,
+                    dtc_count INTEGER,
+                    monitor_status TEXT,
+
+                    FOREIGN KEY (trip_id) REFERENCES trips(id)
+                )
+            ''')
+
             # Índices para mejorar performance
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_trips_vehicle ON trips(vehicle_id)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_trips_start ON trips(start_time)')
@@ -209,6 +265,8 @@ class DatabaseManager:
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_imports_hash ON imports(file_hash)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_pids_profiles_vehicle ON vehicle_pids_profiles(vehicle_id)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_pids_profiles_date ON vehicle_pids_profiles(scan_date)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_obd_extended_trip ON obd_extended(trip_id)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_obd_extended_timestamp ON obd_extended(timestamp)')
 
             conn.commit()
             print("[DB] ✓ Base de datos inicializada correctamente")
@@ -537,6 +595,113 @@ class DatabaseManager:
             raise
         finally:
             conn.close()
+
+    def save_extended_signals(self, trip_id: int, extended_signals: Dict) -> bool:
+        """
+        Guarda señales OBDb extendidas en la tabla obd_extended.
+
+        Args:
+            trip_id: ID del viaje
+            extended_signals: Dict con señales categorizadas
+
+        Returns:
+            True si se guardó correctamente
+        """
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        try:
+            # Extraer valores específicos de cada categoría
+            fuel_system = extended_signals.get('fuel_system', {})
+            o2_sensors = extended_signals.get('o2_sensors', {})
+            emissions = extended_signals.get('emissions', {})
+            exhaust = extended_signals.get('exhaust', {})
+            dpf = extended_signals.get('dpf', {})
+            battery = extended_signals.get('battery', {})
+            diagnostics = extended_signals.get('diagnostics', {})
+
+            cursor.execute('''
+                INSERT INTO obd_extended (
+                    trip_id,
+                    fuel_trim_short_1, fuel_trim_long_1,
+                    fuel_trim_short_2, fuel_trim_long_2,
+                    fuel_system_status, fuel_level,
+                    o2_b1s1, o2_b1s2, o2_b2s1, o2_b2s2,
+                    lambda_b1s1, lambda_b1s2,
+                    egr_commanded, egr_error, evap_purge, evap_vapor_pressure,
+                    exhaust_temp_b1s1, exhaust_temp_b1s2,
+                    catalyst_temp_b1s1,
+                    dpf_temperature, dpf_pressure, dpf_soot_load,
+                    battery_voltage, battery_current, battery_soc,
+                    mil_status, dtc_count, monitor_status
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                trip_id,
+                # Fuel system
+                self._extract_signal_value(fuel_system, 'SHORT_FUEL_TRIM_1'),
+                self._extract_signal_value(fuel_system, 'LONG_FUEL_TRIM_1'),
+                self._extract_signal_value(fuel_system, 'SHORT_FUEL_TRIM_2'),
+                self._extract_signal_value(fuel_system, 'LONG_FUEL_TRIM_2'),
+                self._extract_signal_value(fuel_system, 'FUEL_SYSTEM_STATUS'),
+                self._extract_signal_value(fuel_system, 'FUEL_LEVEL'),
+                # O2 sensors
+                self._extract_signal_value(o2_sensors, 'O2_B1S1'),
+                self._extract_signal_value(o2_sensors, 'O2_B1S2'),
+                self._extract_signal_value(o2_sensors, 'O2_B2S1'),
+                self._extract_signal_value(o2_sensors, 'O2_B2S2'),
+                self._extract_signal_value(o2_sensors, 'LAMBDA_B1S1'),
+                self._extract_signal_value(o2_sensors, 'LAMBDA_B1S2'),
+                # Emissions
+                self._extract_signal_value(emissions, 'COMMANDED_EGR'),
+                self._extract_signal_value(emissions, 'EGR_ERROR'),
+                self._extract_signal_value(emissions, 'EVAP_PURGE'),
+                self._extract_signal_value(emissions, 'EVAP_VAPOR_PRESSURE'),
+                # Exhaust
+                self._extract_signal_value(exhaust, 'EXHAUST_TEMP_B1S1'),
+                self._extract_signal_value(exhaust, 'EXHAUST_TEMP_B1S2'),
+                self._extract_signal_value(exhaust, 'CATALYST_TEMP_B1S1'),
+                # DPF
+                self._extract_signal_value(dpf, 'DPF_TEMPERATURE'),
+                self._extract_signal_value(dpf, 'DPF_PRESSURE'),
+                self._extract_signal_value(dpf, 'DPF_SOOT_LOAD'),
+                # Battery
+                self._extract_signal_value(battery, 'BATTERY_VOLTAGE'),
+                self._extract_signal_value(battery, 'BATTERY_CURRENT'),
+                self._extract_signal_value(battery, 'BATTERY_SOC'),
+                # Diagnostics
+                self._extract_signal_value(diagnostics, 'MIL_STATUS'),
+                self._extract_signal_value(diagnostics, 'DTC_COUNT'),
+                self._extract_signal_value(diagnostics, 'MONITOR_STATUS')
+            ))
+
+            conn.commit()
+            print(f"[DB] ✓ Señales extendidas guardadas para viaje {trip_id}")
+            return True
+
+        except Exception as e:
+            conn.rollback()
+            print(f"[DB] ✗ Error guardando señales extendidas: {e}")
+            return False
+        finally:
+            conn.close()
+
+    def _extract_signal_value(self, signal_dict: Dict, signal_id: str):
+        """
+        Extrae valor de una señal del dict de señales.
+
+        Args:
+            signal_dict: Dict de señales
+            signal_id: ID de la señal
+
+        Returns:
+            Valor de la señal o None
+        """
+        if signal_id in signal_dict:
+            signal_info = signal_dict[signal_id]
+            if isinstance(signal_info, dict):
+                return signal_info.get('value')
+            return signal_info
+        return None
 
     def get_trip(self, trip_id: int) -> Optional[Dict]:
         """
