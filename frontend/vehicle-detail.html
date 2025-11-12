@@ -295,6 +295,68 @@
 
     </div>
 
+    <!-- MODAL: AGREGAR MANTENIMIENTO -->
+    <div id="modalAddMaintenance" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2><i class="fas fa-plus-circle"></i> Agregar Mantenimiento</h2>
+                <button class="modal-close" onclick="closeMaintenanceModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="addMaintenanceForm">
+                    <div class="form-group">
+                        <label>Tipo de Mantenimiento *</label>
+                        <select id="maintenanceType" required>
+                            <option value="">Seleccionar...</option>
+                            <option value="Cambio de aceite">Cambio de aceite</option>
+                            <option value="Cambio de filtros">Cambio de filtros</option>
+                            <option value="Revisión de frenos">Revisión de frenos</option>
+                            <option value="Cambio de neumáticos">Cambio de neumáticos</option>
+                            <option value="Revisión general">Revisión general</option>
+                            <option value="Reparación">Reparación</option>
+                            <option value="Otro">Otro</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Descripción *</label>
+                        <textarea id="maintenanceDescription" rows="3" required placeholder="Describe el mantenimiento realizado..."></textarea>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Fecha *</label>
+                            <input type="date" id="maintenanceDate" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Kilometraje</label>
+                            <input type="number" id="maintenanceMileage" placeholder="150000">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Coste (€)</label>
+                        <input type="number" id="maintenanceCost" step="0.01" placeholder="150.00">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Taller/Proveedor</label>
+                        <input type="text" id="maintenanceProvider" placeholder="Nombre del taller">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeMaintenanceModal()">
+                    <i class="fas fa-times"></i> Cancelar
+                </button>
+                <button type="button" class="btn btn-success" onclick="saveMaintenanceRecord()">
+                    <i class="fas fa-check"></i> Guardar
+                </button>
+            </div>
+        </div>
+    </div>
+
     <style>
         .kpi-grid {
             display: grid;
@@ -389,6 +451,165 @@
             }
             .kpi-grid {
                 grid-template-columns: 1fr;
+            }
+        }
+
+        /* Estilos para mantenimiento */
+        .maintenance-item:hover {
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+            transform: translateY(-2px);
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+
+        /* Estilos para modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+            animation: fadeIn 0.2s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 16px;
+            max-width: 600px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateY(-50px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1.5rem 2rem;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .modal-header h2 {
+            margin: 0;
+            font-size: 1.5rem;
+            color: #1e293b;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            color: #64748b;
+            cursor: pointer;
+            padding: 0.5rem;
+            line-height: 1;
+            transition: color 0.2s;
+        }
+
+        .modal-close:hover {
+            color: #ef4444;
+        }
+
+        .modal-body {
+            padding: 2rem;
+        }
+
+        .modal-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 1rem;
+            padding: 1.5rem 2rem;
+            border-top: 1px solid #e2e8f0;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+            color: #1e293b;
+            font-size: 0.9rem;
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        .form-group textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        .btn-sm {
+            padding: 0.5rem 1rem;
+            font-size: 0.85rem;
+        }
+
+        @media (max-width: 768px) {
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+
+            .modal-content {
+                width: 95%;
+                max-height: 95vh;
+            }
+
+            .modal-header {
+                padding: 1rem 1.5rem;
+            }
+
+            .modal-body {
+                padding: 1.5rem;
+            }
+
+            .modal-footer {
+                padding: 1rem 1.5rem;
             }
         }
     </style>
@@ -655,13 +876,25 @@
                 }
 
                 list.innerHTML = maintenance.map(m => `
-                    <div style="padding: 1rem; background: #f8fafc; border-radius: 8px; margin-bottom: 0.5rem; display: flex; justify-content: space-between; align-items: start;">
-                        <div>
-                            <strong style="color: #1e293b;">${m.type}</strong>
-                            <p style="margin: 0.25rem 0 0 0; color: #64748b; font-size: 0.9rem;">${SENTINEL.Formatter.date(m.date)}</p>
-                            ${m.notes ? `<p style="margin: 0.5rem 0 0 0; color: #475569; font-size: 0.9rem;">${m.notes}</p>` : ''}
+                    <div class="maintenance-item" style="padding: 1.5rem; background: white; border: 1px solid #e2e8f0; border-radius: 12px; margin-bottom: 1rem; transition: all 0.3s ease;">
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem;">
+                            <div style="flex: 1;">
+                                <h4 style="margin: 0 0 0.5rem 0; color: #1e293b;">${m.type}</h4>
+                                <span style="display: flex; align-items: center; gap: 0.5rem; color: #64748b; font-size: 0.9rem;">
+                                    <i class="fas fa-calendar"></i>
+                                    ${SENTINEL.Formatter.date(m.date)}
+                                </span>
+                            </div>
+                            <button class="btn btn-sm btn-danger" onclick="deleteMaintenanceRecord(${m.id})" style="padding: 0.5rem 1rem; font-size: 0.85rem;">
+                                <i class="fas fa-trash"></i>
+                            </button>
                         </div>
-                        <span style="color: #64748b; font-size: 0.85rem;">${m.mileage ? m.mileage + ' km' : ''}</span>
+                        ${m.description ? `<p style="margin: 0.5rem 0; color: #475569; line-height: 1.6;">${m.description}</p>` : ''}
+                        <div style="display: flex; gap: 1.5rem; flex-wrap: wrap; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #e2e8f0;">
+                            ${m.mileage ? `<span style="display: flex; align-items: center; gap: 0.5rem; color: #64748b; font-size: 0.9rem;"><i class="fas fa-tachometer-alt"></i> ${m.mileage} km</span>` : ''}
+                            ${m.cost ? `<span style="display: flex; align-items: center; gap: 0.5rem; color: #64748b; font-size: 0.9rem;"><i class="fas fa-euro-sign"></i> ${m.cost}€</span>` : ''}
+                            ${m.provider ? `<span style="display: flex; align-items: center; gap: 0.5rem; color: #64748b; font-size: 0.9rem;"><i class="fas fa-wrench"></i> ${m.provider}</span>` : ''}
+                        </div>
                     </div>
                 `).join('');
             }
@@ -1170,6 +1403,130 @@
             document.getElementById('aiValuationBtn').addEventListener('click', analyzeValuation);
 
             // === FIN FUNCIONES DE ANÁLISIS IA ===
+
+            // === FUNCIONES DE MANTENIMIENTO ===
+
+            /**
+             * Abrir modal de mantenimiento
+             */
+            function openMaintenanceModal() {
+                const modal = document.getElementById('modalAddMaintenance');
+                if (modal) {
+                    modal.style.display = 'flex';
+
+                    // Limpiar formulario
+                    document.getElementById('addMaintenanceForm').reset();
+
+                    // Establecer fecha actual
+                    const today = new Date().toISOString().split('T')[0];
+                    document.getElementById('maintenanceDate').value = today;
+
+                    // Establecer kilometraje actual si existe
+                    if (vehicleData && vehicleData.mileage) {
+                        document.getElementById('maintenanceMileage').value = vehicleData.mileage;
+                    }
+                }
+            }
+
+            /**
+             * Cerrar modal de mantenimiento
+             */
+            function closeMaintenanceModal() {
+                const modal = document.getElementById('modalAddMaintenance');
+                if (modal) {
+                    modal.style.display = 'none';
+                }
+            }
+
+            /**
+             * Guardar registro de mantenimiento
+             */
+            async function saveMaintenanceRecord() {
+                const form = document.getElementById('addMaintenanceForm');
+
+                if (!form.checkValidity()) {
+                    SENTINEL.Toast.warning('Completa todos los campos obligatorios');
+                    form.reportValidity();
+                    return;
+                }
+
+                const maintenanceData = {
+                    vehicle_id: parseInt(vehicleId),
+                    type: document.getElementById('maintenanceType').value,
+                    description: document.getElementById('maintenanceDescription').value,
+                    date: document.getElementById('maintenanceDate').value,
+                    mileage: parseInt(document.getElementById('maintenanceMileage').value) || null,
+                    cost: parseFloat(document.getElementById('maintenanceCost').value) || null,
+                    provider: document.getElementById('maintenanceProvider').value || null
+                };
+
+                SENTINEL.Toast.info('Guardando mantenimiento...');
+
+                try {
+                    const response = await fetch('http://localhost:5000/api/maintenance', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify(maintenanceData)
+                    });
+
+                    if (!response.ok) {
+                        throw new Error('Error al guardar mantenimiento');
+                    }
+
+                    const result = await response.json();
+
+                    SENTINEL.Toast.success('Mantenimiento guardado correctamente');
+
+                    // Cerrar modal
+                    closeMaintenanceModal();
+
+                    // Recargar historial
+                    await loadMaintenance();
+
+                } catch (error) {
+                    console.error('Error:', error);
+                    SENTINEL.Toast.error('Error al guardar el mantenimiento');
+                }
+            }
+
+            /**
+             * Eliminar registro de mantenimiento
+             */
+            async function deleteMaintenanceRecord(maintenanceId) {
+                if (!confirm('¿Estás seguro de que deseas eliminar este registro de mantenimiento?')) {
+                    return;
+                }
+
+                try {
+                    const response = await fetch(`http://localhost:5000/api/maintenance/${maintenanceId}`, {
+                        method: 'DELETE'
+                    });
+
+                    if (!response.ok) {
+                        throw new Error('Error al eliminar');
+                    }
+
+                    SENTINEL.Toast.success('Registro eliminado correctamente');
+
+                    // Recargar historial
+                    await loadMaintenance();
+
+                } catch (error) {
+                    console.error('Error:', error);
+                    SENTINEL.Toast.error('Error al eliminar el registro');
+                }
+            }
+
+            // Exponer funciones al scope global para onclick handlers
+            window.openMaintenanceModal = openMaintenanceModal;
+            window.closeMaintenanceModal = closeMaintenanceModal;
+            window.saveMaintenanceRecord = saveMaintenanceRecord;
+            window.deleteMaintenanceRecord = deleteMaintenanceRecord;
+
+            // Event listener para botón de agregar mantenimiento
+            document.getElementById('addMaintenanceBtn').addEventListener('click', openMaintenanceModal);
+
+            // === FIN FUNCIONES DE MANTENIMIENTO ===
 
             // Inicializar
             await loadVehicleData();
