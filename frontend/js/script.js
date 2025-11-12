@@ -152,6 +152,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (newMessage) newMessage.style.display = workMode === 'new' ? 'block' : 'none';
                 if (importSection) importSection.style.display = workMode === 'import' ? 'block' : 'none';
 
+                // Mostrar/ocultar Configuración del Vehículo (SOLO en modo 'new' o 'import')
+                if (configCard) {
+                    configCard.style.display = (workMode === 'new' || workMode === 'import') ? 'block' : 'none';
+                }
+
                 // Mostrar/ocultar botón de guardar nuevo vehículo
                 if (saveNewVehicleSection) {
                     saveNewVehicleSection.style.display = (workMode === 'new' || workMode === 'import') ? 'block' : 'none';
