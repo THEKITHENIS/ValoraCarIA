@@ -778,4 +778,85 @@ document.addEventListener('DOMContentLoaded', () => {
         .catch(() => {});
 });
 
+// =============================================================================
+// ESTILOS CSS PARA TOASTS
+// =============================================================================
+
+const toastStyles = `
+.sentinel-toast {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: var(--bg-card);
+    color: var(--text-primary);
+    padding: 1rem 1.5rem;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    z-index: 10000;
+    opacity: 0;
+    transform: translateX(100%);
+    transition: all 0.3s ease;
+}
+
+.sentinel-toast.show {
+    opacity: 1;
+    transform: translateX(0);
+}
+
+.sentinel-toast-success {
+    border-left: 4px solid var(--success);
+}
+
+.sentinel-toast-error {
+    border-left: 4px solid var(--danger);
+}
+
+.sentinel-toast-warning {
+    border-left: 4px solid var(--warning);
+}
+
+.sentinel-toast-info {
+    border-left: 4px solid var(--primary);
+}
+
+.sentinel-toast i {
+    font-size: 1.25rem;
+}
+
+.sentinel-toast-success i { color: var(--success); }
+.sentinel-toast-error i { color: var(--danger); }
+.sentinel-toast-warning i { color: var(--warning); }
+.sentinel-toast-info i { color: var(--primary); }
+
+.sentinel-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    color: var(--text-secondary);
+}
+
+.sentinel-loading .spinner {
+    width: 40px;
+    height: 40px;
+    border: 4px solid rgba(59, 130, 246, 0.2);
+    border-top-color: var(--primary);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-bottom: 1rem;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+`;
+
+const styleSheet = document.createElement('style');
+styleSheet.textContent = toastStyles;
+document.head.appendChild(styleSheet);
+
 console.log('[SENTINEL COMMON] ✓ Módulo cargado correctamente');
