@@ -1086,7 +1086,9 @@ document.addEventListener('DOMContentLoaded', () => {
         activeVehicleId = selectedOption.value;
         activeVehicleInfo = JSON.parse(selectedOption.dataset.vehicle);
 
-        // Guardar en localStorage para persistencia
+        // FIX: Guardar usando SENTINEL.ActiveVehicle para compatibilidad con viajes automáticos
+        SENTINEL.ActiveVehicle.set(parseInt(activeVehicleId));
+        // Mantener compatibilidad con código legacy
         localStorage.setItem('activeVehicleId', activeVehicleId);
         localStorage.setItem('activeVehicleInfo', JSON.stringify(activeVehicleInfo));
 
@@ -1104,7 +1106,9 @@ document.addEventListener('DOMContentLoaded', () => {
         tripVehicleSection.style.display = 'none';
         connectedVehicleCard.style.display = 'block';
 
-        SENTINEL.Toast.success(`Vehículo ${vehicleName} seleccionado`);
+        console.log(`[TRIP] ✓ Vehículo ${vehicleName} seleccionado (ID: ${activeVehicleId})`);
+        console.log(`[TRIP] ✓ Guardado en SENTINEL.ActiveVehicle para viajes automáticos`);
+        SENTINEL.Toast.success(`Vehículo ${vehicleName} listo. Los viajes se crearán automáticamente al detectar el motor encendido.`);
 
         // ESCANEO AUTOMÁTICO DE PIDs DISPONIBLES
         if (typeof scanAvailablePIDs === 'function') {
@@ -1798,6 +1802,9 @@ document.addEventListener('DOMContentLoaded', () => {
             activeVehicleId = savedVehicleId;
             activeVehicleInfo = JSON.parse(savedVehicleInfo);
 
+            // FIX: También guardar en SENTINEL.ActiveVehicle para viajes automáticos
+            SENTINEL.ActiveVehicle.set(parseInt(savedVehicleId));
+
             // Restaurar información del vehículo en la tarjeta
             const vehicleName = `${activeVehicleInfo.brand} ${activeVehicleInfo.model}`.trim();
 
@@ -1814,6 +1821,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             console.log(`[TRIP] ✓ Vehículo ${vehicleName} restaurado desde localStorage`);
+            console.log(`[TRIP] ✓ Viajes automáticos activados para vehículo ID ${savedVehicleId}`);
         }
 
         // Event listeners - Trip Control
