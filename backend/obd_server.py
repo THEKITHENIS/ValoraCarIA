@@ -335,34 +335,42 @@ def initialize_obd_connection(force_reconnect=False):
                 print(f"[OBD] ✓ {len(supported_commands_cache)} comandos soportados")
 
             # === Inicializar integración OBDb ===
+            # TEMPORALMENTE DESACTIVADO: Causa regresión en detección de PIDs
+            # TODO: Arreglar inicialización de OBDbIntegration para usar default.json correctamente
             global obdb_integration, obdb_parser
-            if OBDB_AVAILABLE:
-                try:
-                    print("[OBDb] Inicializando parser...")
-                    obdb_parser = OBDbParser("default.json")
+            obdb_integration = None
+            obdb_parser = None
+            print("[OBDb] ⚠️ Integración OBDb DESACTIVADA temporalmente (restaurando PIDs básicos)")
+            print("[OBDb] El sistema funcionará con detección automática de PIDs soportados")
 
-                    if obdb_parser.commands:
-                        print(f"[OBDb] ✓ Parser cargado: {len(obdb_parser.commands)} comandos disponibles")
-
-                        # Intentar cargar perfil del vehículo activo
-                        # (Por ahora sin perfil específico)
-                        obdb_integration = OBDbIntegration(connection)
-                        print("[OBDb] ✓ Integración OBDb activada")
-                    else:
-                        print("[OBDb] ⚠️ No se cargaron comandos")
-                        obdb_integration = None
-
-                except Exception as e:
-                    print(f"[OBDb] ⚠️ Error en integración OBDb: {e}")
-                    import traceback
-                    traceback.print_exc()
-                    obdb_integration = None
-            else:
-                if not OBDB_AVAILABLE:
-                    print("[OBDb] Módulos no disponibles")
-                elif not connection:
-                    print("[OBDb] Sin conexión OBD")
-                obdb_integration = None
+            # NOTA: Descomentar cuando se arregle el problema de inicialización
+            # if OBDB_AVAILABLE:
+            #     try:
+            #         print("[OBDb] Inicializando parser...")
+            #         obdb_parser = OBDbParser("default.json")
+            #
+            #         if obdb_parser.commands:
+            #             print(f"[OBDb] ✓ Parser cargado: {len(obdb_parser.commands)} comandos disponibles")
+            #
+            #             # Intentar cargar perfil del vehículo activo
+            #             # (Por ahora sin perfil específico)
+            #             obdb_integration = OBDbIntegration(connection)
+            #             print("[OBDb] ✓ Integración OBDb activada")
+            #         else:
+            #             print("[OBDb] ⚠️ No se cargaron comandos")
+            #             obdb_integration = None
+            #
+            #     except Exception as e:
+            #         print(f"[OBDb] ⚠️ Error en integración OBDb: {e}")
+            #         import traceback
+            #         traceback.print_exc()
+            #         obdb_integration = None
+            # else:
+            #     if not OBDB_AVAILABLE:
+            #         print("[OBDb] Módulos no disponibles")
+            #     elif not connection:
+            #         print("[OBDb] Sin conexión OBD")
+            #     obdb_integration = None
 
             return True
         else:
