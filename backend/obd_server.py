@@ -2557,6 +2557,339 @@ def get_obdb_status():
     return jsonify(status)
 
 
+# --- ENDPOINTS ADICIONALES ---
+
+@app.route("/api/trips", methods=["GET"])
+def get_all_trips():
+    """
+    Lista todos los viajes (opcionalmente filtrados por vehículo)
+
+    Query Params:
+        vehicle_id: (Opcional) Filtrar por ID de vehículo
+        limit: (Opcional) Límite de resultados
+        offset: (Opcional) Offset para paginación
+    """
+    if not db:
+        return jsonify({"error": "Base de datos no disponible"}), 500
+
+    try:
+        vehicle_id = request.args.get('vehicle_id', type=int)
+        limit = request.args.get('limit', type=int, default=50)
+        offset = request.args.get('offset', type=int, default=0)
+
+        conn = db._get_connection()
+        cursor = conn.cursor()
+
+        if vehicle_id:
+            cursor.execute('''
+                SELECT * FROM trips
+                WHERE vehicle_id = ?
+                ORDER BY start_timestamp DESC
+                LIMIT ? OFFSET ?
+            ''', (vehicle_id, limit, offset))
+        else:
+            cursor.execute('''
+                SELECT * FROM trips
+                ORDER BY start_timestamp DESC
+                LIMIT ? OFFSET ?
+            ''', (limit, offset))
+
+        trips = []
+        for row in cursor.fetchall():
+            trips.append({
+                'id': row[0],
+                'vehicle_id': row[1],
+                'start_timestamp': row[2],
+                'end_timestamp': row[3],
+                'duration_seconds': row[4],
+                'distance_km': row[5],
+                'avg_speed': row[6],
+                'max_speed': row[7],
+                'avg_rpm': row[8],
+                'max_rpm': row[9],
+                'fuel_consumed': row[10]
+            })
+
+        conn.close()
+
+        return jsonify({
+            'success': True,
+            'trips': trips,
+            'count': len(trips)
+        })
+
+    except Exception as e:
+        print(f"[API] Error obteniendo viajes: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/gemini/status", methods=["GET"])
+def gemini_status():
+    """
+    Verifica si Gemini AI está disponible
+
+    Returns:
+        available: bool - Si Gemini está configurado
+        model: str - Nombre del modelo configurado
+    """
+    return jsonify({
+        'available': model is not None,
+        'model': GEMINI_MODEL_NAME if model else None,
+        'configured': GEMINI_API_KEY != "TU_GEMINI_API_KEY" and len(GEMINI_API_KEY) >= 30
+    })
+
+
+@app.route("/api/gemini/analyze", methods=["POST"])
+def gemini_analyze():
+    """
+    Análisis general con Gemini AI
+
+    Body JSON:
+        prompt: str - El prompt o pregunta para Gemini
+        context: dict - (Opcional) Contexto adicional
+    """
+    if not model:
+        return jsonify({
+            'success': False,
+            'error': 'IA no disponible. Configura GEMINI_API_KEY en obd_server.py'
+        }), 503
+
+    try:
+        data = request.json
+        prompt = data.get('prompt')
+        context = data.get('context', {})
+
+        if not prompt:
+            return jsonify({'error': 'prompt requerido'}), 400
+
+        # Construir prompt completo con contexto
+        full_prompt = prompt
+        if context:
+            full_prompt = f"Contexto: {json.dumps(context, indent=2)}\n\n{prompt}"
+
+        # Obtener análisis
+        response = model.generate_content(full_prompt)
+
+        return jsonify({
+            'success': True,
+            'analysis': response.text
+        })
+
+    except Exception as e:
+        print(f"[GEMINI] Error en análisis: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route("/api/gemini/analyze-csv", methods=["POST"])
+def gemini_analyze_csv():
+    """
+    Analiza datos CSV con Gemini AI
+
+    Body JSON:
+        vehicle_id: int - ID del vehículo
+        csv_file: str - (Opcional) Ruta del archivo CSV
+        trip_id: int - (Opcional) ID del viaje a analizar
+    """
+    if not model:
+        return jsonify({
+            'success': False,
+            'error': 'IA no disponible. Configura GEMINI_API_KEY en obd_server.py'
+        }), 503
+
+    if not db:
+        return jsonify({'error': 'Base de datos no disponible'}), 500
+
+    try:
+        data = request.json
+        vehicle_id = data.get('vehicle_id')
+        trip_id = data.get('trip_id')
+
+        if not vehicle_id:
+            return jsonify({'error': 'vehicle_id requerido'}), 400
+
+        # Obtener datos del vehículo
+        vehicle = db.get_vehicle(vehicle_id)
+        if not vehicle:
+            return jsonify({'error': 'Vehículo no encontrado'}), 404
+
+        # Obtener estadísticas del vehículo
+        stats = db.get_vehicle_statistics(vehicle_id)
+
+        # Construir prompt para análisis
+        prompt = f"""
+Analiza los datos OBD-II del siguiente vehículo:
+
+**Vehículo:** {vehicle['brand']} {vehicle['model']} ({vehicle['year']})
+**Combustible:** {vehicle['fuel_type']}
+**Transmisión:** {vehicle['transmission']}
+**Kilometraje:** {vehicle.get('mileage', 'N/A')} km
+
+**Estadísticas de uso:**
+- Total de viajes: {stats.get('total_trips', 0)}
+- Distancia total: {stats.get('total_distance', 0):.2f} km
+- Velocidad promedio: {stats.get('avg_speed', 0):.2f} km/h
+- RPM promedio: {stats.get('avg_rpm', 0):.0f}
+
+Proporciona:
+1. **Resumen del estado del vehículo** basado en los datos de uso
+2. **Problemas potenciales** detectados en los patrones de conducción
+3. **Recomendaciones de mantenimiento** específicas para este modelo
+4. **Estimación de salud general** del vehículo (0-100)
+"""
+
+        # Obtener análisis
+        response = model.generate_content(prompt)
+
+        return jsonify({
+            'success': True,
+            'analysis': response.text,
+            'vehicle_info': {
+                'brand': vehicle['brand'],
+                'model': vehicle['model'],
+                'year': vehicle['year']
+            },
+            'stats': stats
+        })
+
+    except Exception as e:
+        print(f"[GEMINI] Error en análisis CSV: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route("/api/gemini/health-report", methods=["POST"])
+def gemini_health_report():
+    """
+    Genera un informe de salud detallado con Gemini AI
+
+    Body JSON:
+        vehicle_id: int - ID del vehículo
+        include_maintenance: bool - Incluir historial de mantenimiento
+    """
+    if not model:
+        return jsonify({
+            'success': False,
+            'error': 'IA no disponible. Configura GEMINI_API_KEY en obd_server.py'
+        }), 503
+
+    if not db:
+        return jsonify({'error': 'Base de datos no disponible'}), 500
+
+    try:
+        data = request.json
+        vehicle_id = data.get('vehicle_id')
+        include_maintenance = data.get('include_maintenance', True)
+
+        if not vehicle_id:
+            return jsonify({'error': 'vehicle_id requerido'}), 400
+
+        # Obtener datos del vehículo
+        vehicle = db.get_vehicle(vehicle_id)
+        if not vehicle:
+            return jsonify({'error': 'Vehículo no encontrado'}), 404
+
+        # Obtener estadísticas
+        stats = db.get_vehicle_statistics(vehicle_id)
+
+        # Obtener últimos viajes
+        recent_trips = db.get_vehicle_trips(vehicle_id, limit=10)
+
+        # Construir resumen de viajes
+        trips_summary = ""
+        if recent_trips:
+            trips_summary = "\n**Últimos 10 viajes:**\n"
+            for trip in recent_trips:
+                trips_summary += f"- {trip.get('distance_km', 0):.2f} km, "
+                trips_summary += f"Vel. media: {trip.get('avg_speed', 0):.1f} km/h, "
+                trips_summary += f"RPM media: {trip.get('avg_rpm', 0):.0f}\n"
+
+        # Obtener mantenimiento si se solicita
+        maintenance_summary = ""
+        if include_maintenance:
+            maintenance = db.get_vehicle_maintenance(vehicle_id)
+            if maintenance:
+                maintenance_summary = "\n**Historial de mantenimiento:**\n"
+                for item in maintenance[:5]:  # Últimos 5
+                    maintenance_summary += f"- {item.get('date', 'N/A')}: {item.get('description', 'N/A')}\n"
+
+        # Construir prompt completo
+        prompt = f"""
+Como experto en diagnóstico automotriz, genera un **INFORME DE SALUD COMPLETO** para:
+
+**VEHÍCULO**
+- Marca/Modelo: {vehicle['brand']} {vehicle['model']}
+- Año: {vehicle['year']}
+- Combustible: {vehicle['fuel_type']}
+- Transmisión: {vehicle['transmission']}
+- Kilometraje actual: {vehicle.get('mileage', 'N/A')} km
+- VIN: {vehicle.get('vin', 'N/A')}
+
+**ESTADÍSTICAS DE USO**
+- Total de viajes: {stats.get('total_trips', 0)}
+- Distancia total recorrida: {stats.get('total_distance', 0):.2f} km
+- Velocidad promedio: {stats.get('avg_speed', 0):.2f} km/h
+- Velocidad máxima: {stats.get('max_speed', 0):.2f} km/h
+- RPM promedio: {stats.get('avg_rpm', 0):.0f}
+- RPM máximo: {stats.get('max_rpm', 0):.0f}
+
+{trips_summary}
+
+{maintenance_summary}
+
+**GENERA UN INFORME QUE INCLUYA:**
+
+1. **PUNTUACIÓN DE SALUD GENERAL** (0-100) con justificación
+2. **ANÁLISIS DE PATRONES DE USO**
+   - Estilo de conducción (agresivo/moderado/conservador)
+   - Eficiencia de uso
+   - Zonas de riesgo detectadas
+
+3. **DIAGNÓSTICO POR SISTEMAS**
+   - Motor y transmisión
+   - Sistema de refrigeración
+   - Eficiencia de combustible
+   - Desgaste estimado
+
+4. **RECOMENDACIONES DE MANTENIMIENTO**
+   - Urgentes (hacer ahora)
+   - Próximas (1-3 meses)
+   - Preventivas (3-6 meses)
+
+5. **PROBLEMAS COMUNES PARA ESTE MODELO**
+   - Averías típicas del {vehicle['brand']} {vehicle['model']} {vehicle['year']}
+   - Señales de alerta a vigilar
+
+6. **ESTIMACIÓN DE COSTOS**
+   - Mantenimiento próximo estimado
+   - Valor de reventa aproximado
+
+Sé específico, técnico pero claro. Usa formato markdown para mejor legibilidad.
+"""
+
+        # Obtener análisis
+        response = model.generate_content(prompt)
+
+        return jsonify({
+            'success': True,
+            'report': response.text,
+            'vehicle_info': {
+                'brand': vehicle['brand'],
+                'model': vehicle['model'],
+                'year': vehicle['year'],
+                'vin': vehicle.get('vin', 'N/A')
+            },
+            'stats': stats,
+            'generated_at': datetime.now().isoformat()
+        })
+
+    except Exception as e:
+        print(f"[GEMINI] Error en informe de salud: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
 if __name__ == "__main__":
     print("=" * 70)
     print("SENTINEL PRO - SISTEMA DE FLOTAS v10.0")
