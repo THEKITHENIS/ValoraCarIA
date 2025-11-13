@@ -448,11 +448,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             SENTINEL.ActiveVehicle.setInfo(vehicle);
         }
 
-        // Redirigir a la página de detalles (o al dashboard por ahora)
-        SENTINEL.Toast.info('Redirigiendo al dashboard del vehículo...');
-        setTimeout(() => {
-            window.location.href = 'index.html';
-        }, 1000);
+        // Redirigir a la página de detalles del vehículo
+        localStorage.setItem('activeVehicleId', vehicleId);
+        window.location.href = `vehicle-detail.html?id=${vehicleId}`;
     }
 
     /**
