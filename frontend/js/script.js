@@ -100,6 +100,11 @@ document.addEventListener('DOMContentLoaded', () => {
     let obdDataBatch = []; // Batch de datos OBD para enviar al servidor
     const OBD_BATCH_SIZE = 30; // Guardar cada 30 registros
 
+    // Control de notificaciones y carga (FIX loop infinito)
+    let vehiclesListLoaded = false;
+    let obdConnectedNotified = false;
+    let wasOBDConnected = false;
+
     // Referencias DOM - Trip Control (ACTUALIZADO para nueva estructura)
     const obdStatusIndicator = document.getElementById('obdStatusIndicator');
     const obdStatusText = document.getElementById('obdStatusText');
@@ -937,11 +942,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Mostrar selector de vehículo
                 tripVehicleSection.style.display = 'block';
 
-                // CARGAR LISTA DE VEHÍCULOS
-                await loadVehiclesForTrip();
+                // FIX: Solo cargar vehículos UNA VEZ cuando se conecta OBD por primera vez
+                if (!wasOBDConnected) {
+                    console.log('[OBD] Primera conexión detectada, cargando vehículos...');
+                    await loadVehiclesForTrip();
+                    vehiclesListLoaded = true;
+                    wasOBDConnected = true;
+                }
 
-                if (!activeVehicleId) {
+                // FIX: Mostrar toast solo UNA VEZ
+                if (!obdConnectedNotified && !activeVehicleId) {
                     SENTINEL.Toast.success('Adaptador OBD conectado. Selecciona tu vehículo.');
+                    obdConnectedNotified = true;
                 }
 
             } else {
@@ -951,6 +963,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 statusText.textContent = 'Adaptador OBD desconectado';
                 statusDetail.textContent = 'Conecta el adaptador al puerto OBD del vehículo';
                 tripVehicleSection.style.display = 'none';
+
+                // Reset banderas cuando se desconecta
+                vehiclesListLoaded = false;
+                obdConnectedNotified = false;
+                wasOBDConnected = false;
             }
 
         } catch (error) {
@@ -960,6 +977,11 @@ document.addEventListener('DOMContentLoaded', () => {
             statusDetail.textContent = 'Verifica que el servidor esté ejecutándose';
             tripVehicleSection.style.display = 'none';
             console.error('[OBD] Error verificando OBD:', error);
+
+            // Reset banderas en error
+            vehiclesListLoaded = false;
+            obdConnectedNotified = false;
+            wasOBDConnected = false;
         }
 
         // Verificar cada 5 segundos

@@ -312,34 +312,36 @@ GET    /api/fleet/stats                  - Estadísticas de flota
 - **Leaflet.js** - Mapas interactivos (planificado)
 - **FontAwesome** - Iconografía
 
-## 🔧 OBDb Integration
+## 🔧 OBDb Integration (En Desarrollo)
 
-SENTINEL PRO integra la base de datos OBDb (Open Board Diagnostics Database)
+⚠️ **ESTADO**: Temporalmente desactivada debido a conflictos de inicialización
+
+SENTINEL PRO está en proceso de integrar la base de datos OBDb (Open Board Diagnostics Database)
 para acceso a comandos OBD-II extendidos más allá de los PIDs básicos.
 
-### Características OBDb:
-- ✅ 113 comandos OBD-II estándar (SAE J1979)
-- ✅ 348 señales diferentes
-- ✅ Fuel trim (ajuste combustible)
-- ✅ Sensores O2 (lambda)
-- ✅ Sistema EGR
-- ✅ DPF (filtro partículas diesel)
-- ✅ Temperaturas gases escape
-- ✅ Monitores de emisiones
+### Características Planificadas OBDb:
+- 🔄 113 comandos OBD-II estándar (SAE J1979)
+- 🔄 348 señales diferentes
+- 🔄 Fuel trim (ajuste combustible)
+- 🔄 Sensores O2 (lambda)
+- 🔄 Sistema EGR
+- 🔄 DPF (filtro partículas diesel)
+- 🔄 Temperaturas gases escape
+- 🔄 Monitores de emisiones
 
-### Verificar estado OBDb:
-```bash
-curl http://localhost:5000/api/obdb/status
-```
+### Estado Actual:
+El sistema funciona actualmente con **detección automática de PIDs soportados** por el vehículo.
+La integración OBDb está temporalmente desactivada mientras se corrigen problemas de inicialización.
 
-### Escanear vehículo:
-```bash
-cd backend
-python obdb_scanner.py --vehicle-id 1 --port COM6
-```
+### Archivos Disponibles:
+- `backend/default.json` - 113 comandos OBD-II (listo)
+- `backend/obdb_parser.py` - Parser de comandos (listo)
+- `backend/obdb_integration.py` - Integración con SENTINEL (en revisión)
+- `backend/obdb_scanner.py` - Scanner de PIDs soportados (funcional)
 
-### Fallback automático:
-Si OBDb no está disponible, el sistema funciona automáticamente con los 21 PIDs básicos.
+### Para Desarrolladores:
+La integración está comentada en `backend/obd_server.py` líneas 337-374.
+Descomentar cuando se resuelvan los conflictos de inicialización con archivos inexistentes.
 
 ## ✅ Funcionalidades Implementadas (v10.0)
 
