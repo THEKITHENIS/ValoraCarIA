@@ -20,6 +20,17 @@ from werkzeug.utils import secure_filename
 import statistics
 from csv_importer import CSVImporter
 
+# === OBDb Integration ===
+try:
+    from obdb_parser import OBDbParser
+    from obdb_integration import OBDbIntegration
+    OBDB_AVAILABLE = True
+    print("[OBDb] ✓ Módulos OBDb cargados correctamente")
+except ImportError as e:
+    OBDB_AVAILABLE = False
+    print(f"[OBDb] ⚠️ Módulos OBDb no disponibles: {e}")
+    print("[OBDb] El sistema funcionará solo con PIDs básicos (21)")
+
 # ----- CONFIGURACIÓN OBLIGATORIA -----
 OBD_PORT = "COM6"  # CAMBIA ESTO A TU PUERTO
 GEMINI_API_KEY = "TU_GEMINI_API_KEY"  # TU API KEY
@@ -52,6 +63,10 @@ THERMAL_READING_INTERVAL = 60
 
 trip_data = {}
 maintenanceHistory = []
+
+# Variables globales OBDb
+obdb_integration = None
+obdb_parser = None
 
 vehicle_health = {
     "overall_score": 100,
@@ -318,6 +333,37 @@ def initialize_obd_connection(force_reconnect=False):
             
             if supported_commands_cache:
                 print(f"[OBD] ✓ {len(supported_commands_cache)} comandos soportados")
+
+            # === Inicializar integración OBDb ===
+            global obdb_integration, obdb_parser
+            if OBDB_AVAILABLE:
+                try:
+                    print("[OBDb] Inicializando parser...")
+                    obdb_parser = OBDbParser("default.json")
+
+                    if obdb_parser.commands:
+                        print(f"[OBDb] ✓ Parser cargado: {len(obdb_parser.commands)} comandos disponibles")
+
+                        # Intentar cargar perfil del vehículo activo
+                        # (Por ahora sin perfil específico)
+                        obdb_integration = OBDbIntegration(connection)
+                        print("[OBDb] ✓ Integración OBDb activada")
+                    else:
+                        print("[OBDb] ⚠️ No se cargaron comandos")
+                        obdb_integration = None
+
+                except Exception as e:
+                    print(f"[OBDb] ⚠️ Error en integración OBDb: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    obdb_integration = None
+            else:
+                if not OBDB_AVAILABLE:
+                    print("[OBDb] Módulos no disponibles")
+                elif not connection:
+                    print("[OBDb] Sin conexión OBD")
+                obdb_integration = None
+
             return True
         else:
             print(f"[OBD] ✗ No se pudo conectar")
@@ -2452,6 +2498,57 @@ def rollback_import_endpoint(import_id):
         print(f"[API] Error en rollback: {e}")
         return jsonify({"error": str(e)}), 500
 
+
+@app.route("/api/obdb/extended-signals", methods=["GET"])
+def get_obdb_extended_signals():
+    """
+    Obtiene señales extendidas de OBDb (más allá de los 21 PIDs básicos)
+    """
+    if not obdb_integration:
+        return jsonify({
+            "success": False,
+            "error": "OBDb no disponible",
+            "message": "Sistema funcionando con PIDs básicos solamente"
+        }), 503
+
+    try:
+        # Obtener señales extendidas
+        extended_signals = obdb_integration.get_extended_signals()
+
+        return jsonify({
+            "success": True,
+            "timestamp": datetime.now().isoformat(),
+            "signals": extended_signals,
+            "total_categories": len(extended_signals),
+            "total_signals": sum(len(signals) for signals in extended_signals.values())
+        })
+
+    except Exception as e:
+        print(f"[API] Error obteniendo señales extendidas: {e}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
+@app.route("/api/obdb/status", methods=["GET"])
+def get_obdb_status():
+    """
+    Obtiene el estado de la integración OBDb
+    """
+    status = {
+        "obdb_available": OBDB_AVAILABLE,
+        "obdb_integrated": obdb_integration is not None,
+        "parser_loaded": obdb_parser is not None,
+        "total_commands": len(obdb_parser.commands) if obdb_parser else 0,
+        "mode": "extended" if obdb_integration else "basic",
+        "basic_pids": 21,
+        "extended_pids": len(obdb_parser.commands) if obdb_parser else 0
+    }
+
+    return jsonify(status)
+
+
 if __name__ == "__main__":
     print("=" * 70)
     print("SENTINEL PRO - SISTEMA DE FLOTAS v10.0")
@@ -2475,7 +2572,37 @@ if __name__ == "__main__":
     print("  ✓ Análisis por tipo de transmisión")
     print("  ✓ Estadísticas y analytics avanzados")
     print("  ✓ Sistema de alertas configurables")
-    
+
+    # Verificar tabla obd_extended
+    if db:
+        try:
+            cursor = db.conn.cursor()
+            cursor.execute('''
+                SELECT name FROM sqlite_master
+                WHERE type='table' AND name='obd_extended'
+            ''')
+
+            if not cursor.fetchone():
+                print("\n[DB] ⚠️  Tabla 'obd_extended' no existe")
+                print("[DB] Ejecutando migración automática...")
+
+                # Importar y ejecutar migración
+                try:
+                    from migrate_db import migrate_database
+                    success = migrate_database("../db/sentinel.db", skip_backup=True)
+
+                    if success:
+                        print("[DB] ✓ Migración completada")
+                    else:
+                        print("[DB] ✗ Error en migración")
+                except Exception as e:
+                    print(f"[DB] ✗ Error ejecutando migración: {e}")
+            else:
+                print("\n[DB] ✓ Tabla 'obd_extended' existe")
+
+        except Exception as e:
+            print(f"\n[DB] Error verificando tabla: {e}")
+
     initialize_obd_connection(force_reconnect=True)
     print("\n✓ Servidor activo en http://localhost:5000\n")
 

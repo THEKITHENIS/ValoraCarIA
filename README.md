@@ -312,6 +312,35 @@ GET    /api/fleet/stats                  - Estadísticas de flota
 - **Leaflet.js** - Mapas interactivos (planificado)
 - **FontAwesome** - Iconografía
 
+## 🔧 OBDb Integration
+
+SENTINEL PRO integra la base de datos OBDb (Open Board Diagnostics Database)
+para acceso a comandos OBD-II extendidos más allá de los PIDs básicos.
+
+### Características OBDb:
+- ✅ 113 comandos OBD-II estándar (SAE J1979)
+- ✅ 348 señales diferentes
+- ✅ Fuel trim (ajuste combustible)
+- ✅ Sensores O2 (lambda)
+- ✅ Sistema EGR
+- ✅ DPF (filtro partículas diesel)
+- ✅ Temperaturas gases escape
+- ✅ Monitores de emisiones
+
+### Verificar estado OBDb:
+```bash
+curl http://localhost:5000/api/obdb/status
+```
+
+### Escanear vehículo:
+```bash
+cd backend
+python obdb_scanner.py --vehicle-id 1 --port COM6
+```
+
+### Fallback automático:
+Si OBDb no está disponible, el sistema funciona automáticamente con los 21 PIDs básicos.
+
 ## ✅ Funcionalidades Implementadas (v10.0)
 
 ### Sistema de Flotas Completo

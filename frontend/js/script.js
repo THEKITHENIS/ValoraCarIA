@@ -1009,11 +1009,23 @@ document.addEventListener('DOMContentLoaded', () => {
                 throw new Error('Error al cargar vehículos');
             }
 
-            const vehicles = await response.json();
+            // FIX: El backend devuelve {success: true, vehicles: [...]}
+            const data = await response.json();
+            const vehicles = data.vehicles || data || [];
 
-            console.log('[TRIP] Vehículos cargados:', vehicles.length);
+            console.log('[TRIP] Respuesta completa:', data);
+            console.log('[TRIP] Vehículos extraídos:', vehicles);
+            console.log('[TRIP] Número de vehículos:', Array.isArray(vehicles) ? vehicles.length : 0);
 
             select.innerHTML = '<option value="">Selecciona un vehículo...</option>';
+
+            // Validar que vehicles sea array
+            if (!Array.isArray(vehicles)) {
+                console.error('[TRIP] ERROR: vehicles no es un array:', typeof vehicles, vehicles);
+                select.innerHTML += '<option value="" disabled>Error: formato de datos incorrecto</option>';
+                SENTINEL.Toast.error('Error en formato de datos de vehículos');
+                return;
+            }
 
             if (vehicles.length === 0) {
                 select.innerHTML += '<option value="" disabled>No hay vehículos. Crea uno nuevo.</option>';
