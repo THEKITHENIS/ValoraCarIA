@@ -707,7 +707,7 @@
                 <div class="result-success">
                     <i class="fas fa-check-circle"></i>
                     <h2>¡Importación Exitosa!</h2>
-                    <p style="color: #64748b;">Los datos han sido importados correctamente</p>
+                    <p style="color: #64748b;">Los datos han sido importados y el vehículo está listo para análisis</p>
 
                     <div class="stats-grid">
                         <div class="stat-box">
@@ -728,14 +728,18 @@
                         </div>
                     </div>
 
-                    <div style="display: flex; gap: 1rem; justify-content: center; margin-top: 2rem;">
+                    <div style="display: flex; gap: 1rem; justify-content: center; margin-top: 2rem; flex-wrap: wrap;">
+                        <a href="analytics.html" class="btn btn-primary">
+                            <i class="fas fa-chart-line"></i>
+                            Ver Analytics
+                        </a>
                         <a href="fleet.html" class="btn btn-primary">
                             <i class="fas fa-cars"></i>
                             Ver Flotas
                         </a>
                         <button id="importMoreBtn" class="btn btn-secondary">
                             <i class="fas fa-plus"></i>
-                            Importar Más Archivos
+                            Importar Más
                         </button>
                     </div>
                 </div>
@@ -1191,6 +1195,14 @@
                     progressText.textContent = '¡Completado!';
 
                     addLog('✅ IMPORTACIÓN COMPLETADA', 'success');
+
+                    // FIX: Establecer vehículo como activo para que sea visible en analytics/fleet
+                    const importedVehicleId = result.vehicle_id || vehicle_id;
+                    if (importedVehicleId) {
+                        SENTINEL.ActiveVehicle.set(parseInt(importedVehicleId));
+                        addLog(`✓ Vehículo ID ${importedVehicleId} establecido como activo`, 'success');
+                        console.log('[IMPORT] ✓ Vehículo establecido como activo:', importedVehicleId);
+                    }
 
                     // Mostrar resultado
                     setTimeout(() => {
