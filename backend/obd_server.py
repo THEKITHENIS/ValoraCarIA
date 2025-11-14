@@ -104,6 +104,44 @@ ALL_POSSIBLE_PIDS = [
     'WARMUPS_SINCE_DTC_CLEAR', 'RUN_TIME_MIL'
 ]
 
+# =============================================================================
+# PIDs CONFIRMADOS QUE FUNCIONAN EN VW TOURAN 2.0 TDI (21 PIDs)
+# =============================================================================
+# Estos PIDs fueron probados y confirmados con el script servidor.py exitoso
+# Se organizan por frecuencia de lectura para optimizar el rendimiento
+
+WORKING_PIDS = {
+    # Críticos (alta frecuencia - cada 200ms)
+    'fast': [
+        'RPM',                      # 861.5 rpm
+        'SPEED',                    # 0.0 km/h
+        'THROTTLE_POS',             # 24.31%
+        'ENGINE_LOAD',              # 42.35%
+        'MAF',                      # 6.41 gps
+        'INTAKE_PRESSURE',          # 87 kPa
+    ],
+
+    # Importantes (frecuencia media - cada 1s)
+    'medium': [
+        'COOLANT_TEMP',             # 38°C
+        'INTAKE_TEMP',              # 20°C
+        'CONTROL_MODULE_VOLTAGE',   # 12.96 V
+        'FUEL_RAIL_PRESSURE_DIRECT',# 30820 kPa (¡DIESEL!)
+        'BAROMETRIC_PRESSURE',      # 94 kPa
+        'RELATIVE_THROTTLE_POS',    # 15.29%
+        'AMBIANT_AIR_TEMP',         # 17°C
+    ],
+
+    # Informativos (baja frecuencia - cada 5s)
+    'slow': [
+        'ACCELERATOR_POS_D',        # 14.51%
+        'ACCELERATOR_POS_E',        # 14.51%
+        'RUN_TIME',                 # 88 s
+        'DISTANCE_W_MIL',           # 0 km
+        'DISTANCE_SINCE_DTC_CLEAR', # 0 km
+    ]
+}
+
 # Variables para PIDs disponibles del vehículo actual
 available_pids = []
 current_vehicle_pids_profile = {}
@@ -170,6 +208,134 @@ def calculate_distance(speed_kmh, time_delta_s):
         distance_km = (speed_kmh / 3600) * time_delta_s
         return distance_km
     return 0
+
+# =============================================================================
+# LECTURA OBD OPTIMIZADA - MÉTODO QUE SÍ FUNCIONA
+# =============================================================================
+# Funciones extraídas del script servidor.py que SÍ lee 21 PIDs correctamente
+# en VW Touran 2.0 TDI. Usa reintentos y verificación correcta.
+
+def read_pid_with_retries(connection, pid_name, max_attempts=3):
+    """
+    Lee un PID con múltiples reintentos
+
+    Método extraído de servidor.py que SÍ funciona en VW Touran 2.0 TDI
+
+    Args:
+        connection: Conexión OBD
+        pid_name: Nombre del PID (ej: 'RPM', 'COOLANT_TEMP')
+        max_attempts: Número máximo de intentos (default: 3)
+
+    Returns:
+        Valor del PID o None si no se pudo leer
+    """
+    if not hasattr(obd.commands, pid_name):
+        return None
+
+    try:
+        cmd = getattr(obd.commands, pid_name)
+
+        # Intentar varias veces (CRÍTICO para que funcione)
+        for attempt in range(max_attempts):
+            try:
+                response = connection.query(cmd)
+
+                # Verificación correcta (igual que servidor.py)
+                if response and response.value is not None:
+                    value = response.value
+
+                    # Extraer valor correctamente
+                    if hasattr(value, 'magnitude'):
+                        return value.magnitude
+                    else:
+                        return value
+
+            except Exception:
+                pass  # Silenciar errores intermedios
+
+            # Pausa entre intentos (da tiempo a la ECU)
+            time.sleep(0.1)
+
+        return None
+
+    except Exception:
+        return None
+
+
+def read_obd_data_optimized(connection, last_readings=None):
+    """
+    Lee PIDs con frecuencias diferentes según importancia
+
+    - Fast: cada 200ms (datos críticos)
+    - Medium: cada 1s (datos importantes)
+    - Slow: cada 5s (datos informativos)
+
+    Args:
+        connection: Conexión OBD
+        last_readings: Dict con timestamps de últimas lecturas
+
+    Returns:
+        tuple: (data, last_readings)
+            - data: Dict con PIDs leídos
+            - last_readings: Dict actualizado con timestamps
+    """
+    if last_readings is None:
+        last_readings = {
+            'fast': datetime.min,
+            'medium': datetime.min,
+            'slow': datetime.min,
+        }
+
+    data = {}
+    now = datetime.now()
+
+    # PIDs rápidos (cada 200ms) - 2 intentos para velocidad
+    if (now - last_readings['fast']).total_seconds() >= 0.2:
+        for pid in WORKING_PIDS['fast']:
+            value = read_pid_with_retries(connection, pid, max_attempts=2)
+            if value is not None:
+                data[pid] = value
+        last_readings['fast'] = now
+
+    # PIDs medios (cada 1s) - 3 intentos para fiabilidad
+    if (now - last_readings['medium']).total_seconds() >= 1.0:
+        for pid in WORKING_PIDS['medium']:
+            value = read_pid_with_retries(connection, pid, max_attempts=3)
+            if value is not None:
+                data[pid] = value
+        last_readings['medium'] = now
+
+    # PIDs lentos (cada 5s) - 3 intentos
+    if (now - last_readings['slow']).total_seconds() >= 5.0:
+        for pid in WORKING_PIDS['slow']:
+            value = read_pid_with_retries(connection, pid, max_attempts=3)
+            if value is not None:
+                data[pid] = value
+        last_readings['slow'] = now
+
+    return data, last_readings
+
+
+def get_current_obd_reading(connection):
+    """
+    Función wrapper compatible con código existente
+
+    Lee TODOS los PIDs disponibles (para compatibilidad)
+    pero usa el método de reintentos que SÍ funciona
+    """
+    data = {}
+
+    # Leer todos los PIDs confirmados
+    all_pids = (WORKING_PIDS['fast'] +
+                WORKING_PIDS['medium'] +
+                WORKING_PIDS['slow'])
+
+    for pid in all_pids:
+        value = read_pid_with_retries(connection, pid, max_attempts=3)
+        if value is not None:
+            data[pid] = value
+
+    return data
 
 # === ANÁLISIS DE SALUD DEL VEHÍCULO ===
 def analyze_vehicle_health(trip_points):
@@ -672,53 +838,67 @@ def scan_available_pids():
 def get_live_data_dynamic():
     """
     Lee TODOS los PIDs disponibles dinámicamente
-    Si no se escaneó antes, usa lista básica
+    MEJORADO: Usa el método con reintentos que SÍ funciona (servidor.py)
     """
     if not connection or not connection.is_connected():
         return jsonify({'error': 'OBD no conectado'}), 400
 
-    # Usar PIDs disponibles o lista básica
-    pids_to_read = available_pids if available_pids else [
-        'RPM', 'SPEED', 'ENGINE_LOAD', 'THROTTLE_POS', 'COOLANT_TEMP',
-        'INTAKE_TEMP', 'MAF', 'INTAKE_PRESSURE'
-    ]
+    # Usar PIDs disponibles del scan O los 21 PIDs confirmados
+    if available_pids and len(available_pids) > 0:
+        # Usar PIDs del scan
+        pids_to_read = available_pids
+        data = {}
 
-    data = {}
-
-    for pid_name in pids_to_read:
-        if not hasattr(obd.commands, pid_name):
-            continue
-
-        try:
-            cmd = getattr(obd.commands, pid_name)
-
-            # 2 reintentos (más rápido para live data)
-            for intento in range(2):
-                try:
-                    response = connection.query(cmd)
-
-                    if response and response.value is not None and not response.is_null():
-                        valor = response.value
-
-                        if hasattr(valor, 'magnitude'):
-                            data[pid_name.lower()] = valor.magnitude
-                        else:
-                            data[pid_name.lower()] = valor
-
-                        break
-
-                except:
-                    pass
-
-                time.sleep(0.02)
-
-        except:
-            pass
+        for pid_name in pids_to_read:
+            value = read_pid_with_retries(connection, pid_name, max_attempts=2)
+            if value is not None:
+                data[pid_name.lower()] = value
+    else:
+        # Usar los 21 PIDs confirmados que SÍ funcionan
+        data = get_current_obd_reading(connection)
+        # Convertir keys a minúsculas para compatibilidad
+        data = {k.lower(): v for k, v in data.items()}
 
     # Añadir timestamp
     data['timestamp'] = datetime.now().isoformat()
 
     return jsonify(data)
+
+# Variable global para control de frecuencias en lectura optimizada
+obd_last_readings = None
+
+@app.route('/api/obd/current-optimized', methods=['GET'])
+def get_current_obd_optimized():
+    """
+    Obtiene lectura OBD actual usando el método optimizado con frecuencias
+
+    Este endpoint usa el sistema de frecuencias para leer PIDs críticos
+    cada 200ms, importantes cada 1s, e informativos cada 5s.
+    Ideal para lecturas continuas sin saturar el adaptador OBD.
+    """
+    global obd_last_readings
+
+    if not connection or not connection.is_connected():
+        return jsonify({'success': False, 'error': 'No conectado'}), 400
+
+    try:
+        # Usar el método optimizado con frecuencias
+        data, obd_last_readings = read_obd_data_optimized(
+            connection,
+            obd_last_readings
+        )
+
+        # Convertir keys a minúsculas para compatibilidad
+        data_lower = {k.lower(): v for k, v in data.items()}
+
+        return jsonify({
+            'success': True,
+            'data': data_lower,
+            'timestamp': datetime.now().isoformat(),
+            'pids_read': len(data_lower)
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/api/vehicles/<int:vehicle_id>/pids-profile', methods=['GET'])
 def get_vehicle_pids_profile_endpoint(vehicle_id):
