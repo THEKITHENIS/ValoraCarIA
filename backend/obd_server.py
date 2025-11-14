@@ -556,7 +556,8 @@ def reset_trip():
         "start_time": None,
         "last_read_time": None,
         "distance_km": 0.0,
-        "points": []
+        "points": [],
+        "trip_id": None  # ID del viaje en BD (modo manual)
     }
 
 reset_trip()
@@ -567,64 +568,44 @@ initialize_csv()
 @app.route("/get_live_data", methods=["GET"])
 def get_live_data():
     global connection, trip_data, last_thermal_reading_time
-    
+
     if not connection or not connection.is_connected():
-        if not initialize_obd_connection(force_reconnect=True):
-            return jsonify({
-                "offline": True,
-                "RPM": None,
-                "SPEED": None,
-                "THROTTLE_POS": None,
-                "ENGINE_LOAD": None,
-                "MAF": None,
-                "COOLANT_TEMP": None,
-                "INTAKE_TEMP": None,
-                "total_distance": 0
-            })
-    
-    # DATOS CRÍTICOS (cada 3s)
-    critical_commands = [
-        obd.commands.RPM,
-        obd.commands.SPEED,
-        obd.commands.THROTTLE_POS,
-        obd.commands.ENGINE_LOAD,
-        obd.commands.MAF
-    ]
-    
+        return jsonify({
+            "offline": True,
+            "RPM": None,
+            "SPEED": None,
+            "THROTTLE_POS": None,
+            "ENGINE_LOAD": None,
+            "MAF": None,
+            "COOLANT_TEMP": None,
+            "INTAKE_TEMP": None,
+            "total_distance": 0
+        })
+
+    # USAR MÉTODO OPTIMIZADO CON REINTENTOS (reduce errores "Failed to read port")
     results = {}
-    for cmd in critical_commands:
-        try:
-            response = connection.query(cmd)
-            if response and response.value is not None:
-                results[cmd.name] = response.value.magnitude if hasattr(response.value, 'magnitude') else response.value
-            else:
-                results[cmd.name] = None
-        except Exception as e:
-            results[cmd.name] = None
-    
-    # DATOS TÉRMICOS (cada 60s)
+
+    # PIDs CRÍTICOS (usar solo los que funcionan)
+    critical_pids = ['RPM', 'SPEED', 'THROTTLE_POS', 'ENGINE_LOAD', 'MAF']
+    for pid_name in critical_pids:
+        value = read_pid_with_retries(connection, pid_name, max_attempts=2)
+        results[pid_name] = value
+
+    # DATOS TÉRMICOS (cada 60s) - usar método optimizado
     thermal_data = {}
     current_time = time.time()
-    
+
     if current_time - last_thermal_reading_time >= THERMAL_READING_INTERVAL:
-        thermal_commands = [
-            obd.commands.COOLANT_TEMP,
-            obd.commands.INTAKE_TEMP
-        ]
-        
-        for cmd in thermal_commands:
-            try:
-                response = connection.query(cmd)
-                if response and response.value is not None:
-                    thermal_data[cmd.name] = response.value.magnitude if hasattr(response.value, 'magnitude') else response.value
-                else:
-                    thermal_data[cmd.name] = None
-            except Exception as e:
-                thermal_data[cmd.name] = None
-        
+        thermal_pids = ['COOLANT_TEMP', 'INTAKE_TEMP']
+        for pid_name in thermal_pids:
+            value = read_pid_with_retries(connection, pid_name, max_attempts=3)
+            if value is not None:
+                thermal_data[pid_name] = value
+
         last_thermal_reading_time = current_time
         results.update(thermal_data)
     else:
+        # Usar últimas lecturas térmicas
         if trip_data.get("points") and len(trip_data["points"]) > 0:
             last_point = trip_data["points"][-1]
             results['COOLANT_TEMP'] = last_point.get('COOLANT_TEMP')
@@ -632,34 +613,33 @@ def get_live_data():
         else:
             results['COOLANT_TEMP'] = None
             results['INTAKE_TEMP'] = None
-    
-    # GESTIÓN DE VIAJE
-    if results.get("RPM") and results.get("RPM") > 400:
-        if not trip_data["active"]:
-            reset_trip()
-            trip_data["active"] = True
-            trip_data["start_time"] = time.time()
-            trip_data["last_read_time"] = time.time()
-            print("[TRIP] ✓ Nuevo viaje iniciado")
-        
+
+    # =========================================================================
+    # MODO MANUAL: Solo registrar datos si hay viaje activo
+    # El viaje se controla desde el frontend (botones Iniciar/Finalizar)
+    # =========================================================================
+    if trip_data["active"]:
         current_time = time.time()
         time_delta_s = current_time - trip_data["last_read_time"]
-        
+
+        # Calcular distancia si hay velocidad
         if results.get("SPEED") and time_delta_s > 0:
             distance_increment = calculate_distance(results.get("SPEED"), time_delta_s)
             trip_data["distance_km"] += distance_increment
-        
+
         results['total_distance'] = round(trip_data['distance_km'], 3)
         trip_data["points"].append(results)
         trip_data["last_read_time"] = current_time
-        
+
+        # Guardar en CSV solo si hay viaje activo
         save_reading_to_csv(results, thermal_data if thermal_data else None)
-        
+
+        # Análisis de salud cada 30 puntos
         if len(trip_data["points"]) % 30 == 0:
             analyze_vehicle_health(trip_data["points"])
     else:
-        results['total_distance'] = trip_data['distance_km'] if trip_data["active"] else 0
-    
+        results['total_distance'] = 0
+
     return jsonify(results)
 
 @app.route("/get_vehicle_health", methods=["GET"])
@@ -682,30 +662,27 @@ def get_health_history():
 def get_obd_health():
     """
     Endpoint para verificar el estado de conexión OBD
-    Retorna información sobre si el adaptador está conectado y el VIN del vehículo
+    Retorna información sobre si el adaptador está conectado
+    NO intenta leer VIN para evitar errores "Failed to read port"
     """
     try:
         # Verificar si el adaptador OBD está conectado
         obd_connected = connection is not None and hasattr(connection, 'is_connected') and connection.is_connected()
 
-        # Intentar obtener VIN si está conectado
-        vehicle_vin = None
+        # Obtener información del puerto y protocolo si está conectado
+        port_info = None
+        protocol_info = None
         if obd_connected:
             try:
-                # Intentar obtener VIN del vehículo conectado
-                # Nota: Esto es opcional y depende de si el adaptador soporta este comando
-                if hasattr(connection, 'query'):
-                    vin_cmd = obd.commands.VIN
-                    if vin_cmd:
-                        response = connection.query(vin_cmd)
-                        if response and not response.is_null():
-                            vehicle_vin = str(response.value)
-            except Exception as vin_error:
-                print(f"[HEALTH] No se pudo obtener VIN: {vin_error}")
+                port_info = connection.port_name() if hasattr(connection, 'port_name') else OBD_PORT
+                protocol_info = connection.protocol_name() if hasattr(connection, 'protocol_name') else "AUTO"
+            except:
+                pass
 
         return jsonify({
             "obd_connected": obd_connected,
-            "vehicle_vin": vehicle_vin,
+            "port": port_info,
+            "protocol": protocol_info,
             "server_running": True,
             "timestamp": datetime.now().isoformat()
         })
@@ -714,11 +691,71 @@ def get_obd_health():
         print(f"[API] Error en endpoint health: {e}")
         return jsonify({
             "obd_connected": False,
-            "vehicle_vin": None,
+            "port": None,
+            "protocol": None,
             "server_running": True,
             "error": str(e),
             "timestamp": datetime.now().isoformat()
         }), 200  # Retornar 200 aunque haya error para que el frontend sepa que el servidor está vivo
+
+@app.route("/api/obd/connect", methods=["POST"])
+def connect_obd():
+    """
+    Endpoint para conectar manualmente al adaptador OBD
+    """
+    try:
+        success = initialize_obd_connection(force_reconnect=True)
+
+        if success:
+            port_info = connection.port_name() if hasattr(connection, 'port_name') else OBD_PORT
+            protocol_info = connection.protocol_name() if hasattr(connection, 'protocol_name') else "AUTO"
+
+            return jsonify({
+                "success": True,
+                "message": "Conectado al adaptador OBD",
+                "port": port_info,
+                "protocol": protocol_info
+            })
+        else:
+            return jsonify({
+                "success": False,
+                "message": "No se pudo conectar al adaptador OBD. Verifica que esté enchufado y el motor encendido."
+            }), 400
+
+    except Exception as e:
+        print(f"[OBD] Error en conexión manual: {e}")
+        return jsonify({
+            "success": False,
+            "message": f"Error al conectar: {str(e)}"
+        }), 500
+
+@app.route("/api/obd/disconnect", methods=["POST"])
+def disconnect_obd():
+    """
+    Endpoint para desconectar manualmente del adaptador OBD
+    """
+    global connection
+
+    try:
+        if connection and connection.is_connected():
+            connection.close()
+            connection = None
+            return jsonify({
+                "success": True,
+                "message": "Desconectado del adaptador OBD"
+            })
+        else:
+            return jsonify({
+                "success": True,
+                "message": "No había conexión OBD activa"
+            })
+
+    except Exception as e:
+        print(f"[OBD] Error en desconexión: {e}")
+        return jsonify({
+            "success": False,
+            "message": f"Error al desconectar: {str(e)}"
+        }), 500
 
 @app.route('/api/obd/scan-available-pids', methods=['POST'])
 def scan_available_pids():
@@ -1843,7 +1880,9 @@ def delete_vehicle_endpoint(vehicle_id):
 
 @app.route("/api/trips/start", methods=["POST"])
 def start_trip_endpoint():
-    """Iniciar un nuevo viaje"""
+    """Iniciar un nuevo viaje (control manual)"""
+    global trip_data
+
     if not db:
         return jsonify({"error": "Base de datos no disponible"}), 500
 
@@ -1854,7 +1893,21 @@ def start_trip_endpoint():
         if not vehicle_id:
             return jsonify({"error": "vehicle_id requerido"}), 400
 
+        # Verificar que OBD esté conectado
+        if not connection or not connection.is_connected():
+            return jsonify({"error": "Adaptador OBD no conectado"}), 400
+
+        # Iniciar viaje en BD
         trip_id = db.start_trip(vehicle_id)
+
+        # Activar trip_data global para que /get_live_data registre datos
+        reset_trip()
+        trip_data["active"] = True
+        trip_data["start_time"] = time.time()
+        trip_data["last_read_time"] = time.time()
+        trip_data["trip_id"] = trip_id  # Guardar ID de BD
+
+        print(f"[TRIP] ✓ Viaje {trip_id} iniciado manualmente para vehículo {vehicle_id}")
 
         return jsonify({
             "success": True,
@@ -1868,7 +1921,9 @@ def start_trip_endpoint():
 
 @app.route("/api/trips/<int:trip_id>/stop", methods=["POST"])
 def stop_trip_endpoint(trip_id):
-    """Finalizar un viaje"""
+    """Finalizar un viaje (control manual)"""
+    global trip_data
+
     if not db:
         return jsonify({"error": "Base de datos no disponible"}), 500
 
@@ -1876,10 +1931,15 @@ def stop_trip_endpoint(trip_id):
         data = request.json
         stats = data.get('stats', {})
 
+        # Finalizar viaje en BD
         success = db.end_trip(trip_id, stats)
 
         if not success:
             return jsonify({"error": "No se pudo finalizar el viaje"}), 400
+
+        # Desactivar trip_data global
+        trip_data["active"] = False
+        print(f"[TRIP] ✓ Viaje {trip_id} finalizado manualmente")
 
         return jsonify({
             "success": True,

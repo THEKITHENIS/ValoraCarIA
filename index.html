@@ -130,13 +130,25 @@
 
             <!-- Estado de conexión OBD -->
             <div class="connection-status">
-                <div class="status-indicator searching" id="obdStatusIndicator">
+                <div class="status-indicator disconnected" id="obdStatusIndicator">
                     <i class="fas fa-circle"></i>
-                    <span id="obdStatusText">Buscando adaptador OBD...</span>
+                    <span id="obdStatusText">Adaptador OBD desconectado</span>
                 </div>
                 <small id="obdStatusDetail" class="status-detail">
-                    Verifica que el adaptador esté conectado y el motor encendido
+                    Haz clic en "Conectar OBD" cuando el adaptador esté enchufado y el motor encendido
                 </small>
+            </div>
+
+            <!-- Botones de control OBD (MODO MANUAL) -->
+            <div class="obd-controls" style="margin-top: 1rem; display: flex; gap: 1rem;">
+                <button id="connectOBDBtn" class="btn btn-success">
+                    <i class="fas fa-plug"></i>
+                    Conectar OBD
+                </button>
+                <button id="disconnectOBDBtn" class="btn btn-secondary" style="display: none;">
+                    <i class="fas fa-unlink"></i>
+                    Desconectar OBD
+                </button>
             </div>
 
             <!-- Selector de vehículo (SE MUESTRA cuando OBD conecta) -->
