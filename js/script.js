@@ -917,11 +917,16 @@ document.addEventListener('DOMContentLoaded', () => {
     /**
      * Verificar conexión OBD y actualizar UI
      */
-    async function checkOBDConnection() {
+    /**
+     * Verificar estado de conexión OBD (solo lectura, no automático)
+     */
+    async function checkOBDConnectionStatus() {
         const statusIndicator = document.getElementById('obdStatusIndicator');
         const statusText = document.getElementById('obdStatusText');
         const statusDetail = document.getElementById('obdStatusDetail');
         const tripVehicleSection = document.getElementById('tripVehicleSection');
+        const connectOBDBtn = document.getElementById('connectOBDBtn');
+        const disconnectOBDBtn = document.getElementById('disconnectOBDBtn');
 
         try {
             const response = await fetch(`${API_URL}/api/health`);
@@ -939,21 +944,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 statusText.textContent = 'Adaptador OBD conectado';
                 statusDetail.textContent = `Puerto: ${data.port || 'N/A'} | Protocolo: ${data.protocol || 'N/A'}`;
 
-                // Mostrar selector de vehículo
-                tripVehicleSection.style.display = 'block';
+                // Mostrar botón de desconectar, ocultar conectar
+                if (connectOBDBtn) connectOBDBtn.style.display = 'none';
+                if (disconnectOBDBtn) disconnectOBDBtn.style.display = 'block';
 
-                // FIX: Solo cargar vehículos UNA VEZ cuando se conecta OBD por primera vez
-                if (!wasOBDConnected) {
-                    console.log('[OBD] Primera conexión detectada, cargando vehículos...');
+                // Mostrar selector de vehículo
+                if (tripVehicleSection) tripVehicleSection.style.display = 'block';
+
+                // Cargar vehículos si es necesario
+                if (!vehiclesListLoaded) {
                     await loadVehiclesForTrip();
                     vehiclesListLoaded = true;
-                    wasOBDConnected = true;
-                }
-
-                // FIX: Mostrar toast solo UNA VEZ
-                if (!obdConnectedNotified && !activeVehicleId) {
-                    SENTINEL.Toast.success('Adaptador OBD conectado. Selecciona tu vehículo.');
-                    obdConnectedNotified = true;
                 }
 
             } else {
@@ -961,31 +962,91 @@ document.addEventListener('DOMContentLoaded', () => {
                 isOBDConnected = false;
                 statusIndicator.className = 'status-indicator disconnected';
                 statusText.textContent = 'Adaptador OBD desconectado';
-                statusDetail.textContent = 'Conecta el adaptador al puerto OBD del vehículo';
-                tripVehicleSection.style.display = 'none';
+                statusDetail.textContent = 'Haz clic en "Conectar OBD" cuando el adaptador esté enchufado';
 
-                // Reset banderas cuando se desconecta
-                vehiclesListLoaded = false;
-                obdConnectedNotified = false;
-                wasOBDConnected = false;
+                // Mostrar botón de conectar, ocultar desconectar
+                if (connectOBDBtn) connectOBDBtn.style.display = 'block';
+                if (disconnectOBDBtn) disconnectOBDBtn.style.display = 'none';
+
+                // Ocultar selector de vehículo
+                if (tripVehicleSection) tripVehicleSection.style.display = 'none';
             }
 
         } catch (error) {
             isOBDConnected = false;
             statusIndicator.className = 'status-indicator searching';
-            statusText.textContent = 'Buscando adaptador OBD...';
-            statusDetail.textContent = 'Verifica que el servidor esté ejecutándose';
-            tripVehicleSection.style.display = 'none';
-            console.error('[OBD] Error verificando OBD:', error);
-
-            // Reset banderas en error
-            vehiclesListLoaded = false;
-            obdConnectedNotified = false;
-            wasOBDConnected = false;
+            statusText.textContent = 'Servidor no disponible';
+            statusDetail.textContent = 'Verifica que el servidor Python esté ejecutándose';
+            if (tripVehicleSection) tripVehicleSection.style.display = 'none';
+            console.error('[OBD] Error verificando estado OBD:', error);
         }
+    }
 
-        // Verificar cada 5 segundos
-        setTimeout(checkOBDConnection, 5000);
+    /**
+     * Conectar manualmente al adaptador OBD
+     */
+    async function connectOBDManually() {
+        const connectOBDBtn = document.getElementById('connectOBDBtn');
+        const originalText = connectOBDBtn.innerHTML;
+
+        try {
+            connectOBDBtn.disabled = true;
+            connectOBDBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Conectando...';
+
+            const response = await fetch(`${API_URL}/api/obd/connect`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                SENTINEL.Toast.success('Adaptador OBD conectado correctamente');
+                await checkOBDConnectionStatus(); // Actualizar estado
+            } else {
+                SENTINEL.Toast.error(data.message || 'No se pudo conectar al adaptador OBD');
+                connectOBDBtn.disabled = false;
+                connectOBDBtn.innerHTML = originalText;
+            }
+
+        } catch (error) {
+            console.error('[OBD] Error en conexión manual:', error);
+            SENTINEL.Toast.error('Error al intentar conectar. Verifica que el servidor esté ejecutándose.');
+            connectOBDBtn.disabled = false;
+            connectOBDBtn.innerHTML = originalText;
+        }
+    }
+
+    /**
+     * Desconectar manualmente del adaptador OBD
+     */
+    async function disconnectOBDManually() {
+        const disconnectOBDBtn = document.getElementById('disconnectOBDBtn');
+
+        try {
+            disconnectOBDBtn.disabled = true;
+
+            const response = await fetch(`${API_URL}/api/obd/disconnect`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                SENTINEL.Toast.success('Adaptador OBD desconectado');
+                await checkOBDConnectionStatus(); // Actualizar estado
+            } else {
+                SENTINEL.Toast.error(data.message || 'Error al desconectar');
+            }
+
+            disconnectOBDBtn.disabled = false;
+
+        } catch (error) {
+            console.error('[OBD] Error en desconexión:', error);
+            SENTINEL.Toast.error('Error al desconectar');
+            disconnectOBDBtn.disabled = false;
+        }
     }
 
     /**
@@ -1867,9 +1928,20 @@ document.addEventListener('DOMContentLoaded', () => {
         window.closeCreateVehicleModal = closeCreateVehicleModal;
         window.saveQuickVehicle = saveQuickVehicle;
 
-        // Iniciar polling de conexión OBD cada 5 segundos
-        obdConnectionCheckInterval = setInterval(checkOBDConnection, 5000);
-        checkOBDConnection(); // Check inmediato al cargar
+        // === MODO MANUAL: Botones de conexión OBD ===
+        const connectOBDBtn = document.getElementById('connectOBDBtn');
+        const disconnectOBDBtn = document.getElementById('disconnectOBDBtn');
+
+        if (connectOBDBtn) {
+            connectOBDBtn.addEventListener('click', connectOBDManually);
+        }
+
+        if (disconnectOBDBtn) {
+            disconnectOBDBtn.addEventListener('click', disconnectOBDManually);
+        }
+
+        // Verificar estado inicial de conexión OBD (solo una vez al cargar)
+        checkOBDConnectionStatus();
     }
 
     // === TRACKING DE VIAJE ACTUAL - FASE 2 v10.0 ===
