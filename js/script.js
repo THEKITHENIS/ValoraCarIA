@@ -1091,7 +1091,8 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        select.innerHTML = '<option value="">Cargando vehículos...</option>';
+        // Placeholder inicial mientras carga
+        select.innerHTML = '<option value="" selected disabled>Cargando vehículos...</option>';
 
         try {
             const response = await fetch(`${API_URL}/api/vehicles`);
@@ -1108,22 +1109,24 @@ document.addEventListener('DOMContentLoaded', () => {
             console.log('[TRIP] Vehículos extraídos:', vehicles);
             console.log('[TRIP] Número de vehículos:', Array.isArray(vehicles) ? vehicles.length : 0);
 
-            select.innerHTML = '<option value="">Selecciona un vehículo...</option>';
+            // Placeholder mejorado: disabled y selected para que no se pueda seleccionar automáticamente
+            select.innerHTML = '<option value="" selected disabled>-- Selecciona un vehículo --</option>';
 
             // Validar que vehicles sea array
             if (!Array.isArray(vehicles)) {
                 console.error('[TRIP] ERROR: vehicles no es un array:', typeof vehicles, vehicles);
-                select.innerHTML += '<option value="" disabled>Error: formato de datos incorrecto</option>';
+                select.innerHTML = '<option value="" selected disabled>Error: formato de datos incorrecto</option>';
                 SENTINEL.Toast.error('Error en formato de datos de vehículos');
                 return;
             }
 
             if (vehicles.length === 0) {
-                select.innerHTML += '<option value="" disabled>No hay vehículos. Crea uno nuevo.</option>';
+                select.innerHTML = '<option value="" selected disabled>No hay vehículos. Crea uno nuevo.</option>';
                 SENTINEL.Toast.info('No hay vehículos. Puedes crear uno nuevo.');
                 return;
             }
 
+            // Añadir vehículos disponibles
             vehicles.forEach(vehicle => {
                 const option = document.createElement('option');
                 option.value = vehicle.id;
@@ -1132,11 +1135,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 select.appendChild(option);
             });
 
-            console.log('[TRIP] Opciones de vehículos añadidas:', select.options.length);
+            console.log('[TRIP] ✓ Cargados', vehicles.length, 'vehículos. Selector requiere selección manual.');
+            console.log('[TRIP] ✓ Botón "Confirmar" deshabilitado hasta selección');
 
         } catch (error) {
             console.error('[TRIP] Error cargando vehículos:', error);
-            select.innerHTML = '<option value="" disabled>Error al cargar vehículos</option>';
+            select.innerHTML = '<option value="" selected disabled>Error al cargar vehículos</option>';
             SENTINEL.Toast.error('Error al cargar vehículos');
         }
     }
