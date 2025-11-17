@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 # -----------------------------------------------------------------------------
 # SENTINEL PRO - MANTENIMIENTO PREDICTIVO v9.0 - SERVIDOR COMPLETO
 # Copia y pega TODO este archivo como obd_server.py
@@ -8,9 +9,6 @@ import obd
 import time
 import json
 import requests
-import geocoder
-import google.generativeai as genai
-from fpdf import FPDF
 import os
 import traceback
 import re
@@ -19,6 +17,32 @@ from datetime import datetime, timedelta
 from werkzeug.utils import secure_filename
 import statistics
 from csv_importer import CSVImporter
+
+# Imports opcionales
+try:
+    import geocoder
+    GEOCODER_AVAILABLE = True
+except ImportError:
+    GEOCODER_AVAILABLE = False
+    print("[Geocoder] ⚠️ No disponible")
+
+try:
+    import google.generativeai as genai
+    GEMINI_AVAILABLE = True
+except ImportError:
+    GEMINI_AVAILABLE = False
+    print("[Gemini] ⚠️ No disponible")
+
+try:
+    from fpdf2 import FPDF
+    PDF_AVAILABLE = True
+except ImportError:
+    try:
+        from fpdf import FPDF
+        PDF_AVAILABLE = True
+    except ImportError:
+        PDF_AVAILABLE = False
+        print("[PDF] ⚠️ No disponible")
 
 # === OBDb Integration ===
 try:
@@ -37,13 +61,14 @@ GEMINI_API_KEY = "TU_GEMINI_API_KEY"  # TU API KEY
 GEMINI_MODEL_NAME = "models/gemini-pro-latest"
 # -------------------------------------
 
-# Configuración de archivos
-CSV_FOLDER = 'csv_data'
-UPLOAD_FOLDER = 'uploaded_csv'
+# Configuración de archivos - Rutas relativas al directorio del proyecto
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # Directorio raíz del proyecto
+CSV_FOLDER = os.path.join(BASE_DIR, 'csv_data')
+UPLOAD_FOLDER = os.path.join(BASE_DIR, 'uploaded_csv')
 ALLOWED_EXTENSIONS = {'csv'}
 CSV_FILENAME = os.path.join(CSV_FOLDER, 'obd_readings.csv')
-HEALTH_HISTORY_FILE = 'health_history.json'
-TRIP_HISTORY_FILE = 'historial_viajes.json'
+HEALTH_HISTORY_FILE = os.path.join(BASE_DIR, 'health_history.json')
+TRIP_HISTORY_FILE = os.path.join(BASE_DIR, 'historial_viajes.json')
 
 os.makedirs(CSV_FOLDER, exist_ok=True)
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
@@ -148,14 +173,17 @@ current_vehicle_pids_profile = {}
 
 # Inicialización Gemini
 model = None
-try:
-    if "TU_API_KEY" in GEMINI_API_KEY or len(GEMINI_API_KEY) < 30:
-        raise ValueError("API KEY no válida")
-    genai.configure(api_key=GEMINI_API_KEY)
-    model = genai.GenerativeModel(GEMINI_MODEL_NAME)
-    print(f"[GEMINI] ✓ Configurado: {GEMINI_MODEL_NAME}")
-except Exception as e:
-    print(f"[GEMINI] ✗ Error: {e}")
+if GEMINI_AVAILABLE:
+    try:
+        if "TU_API_KEY" in GEMINI_API_KEY or len(GEMINI_API_KEY) < 30:
+            raise ValueError("API KEY no válida")
+        genai.configure(api_key=GEMINI_API_KEY)
+        model = genai.GenerativeModel(GEMINI_MODEL_NAME)
+        print(f"[GEMINI] ✓ Configurado: {GEMINI_MODEL_NAME}")
+    except Exception as e:
+        print(f"[GEMINI] ✗ Error: {e}")
+else:
+    print("[GEMINI] ⚠️ Módulo no disponible - Funcionalidad de IA deshabilitada")
 
 # === FUNCIONES CSV ===
 def initialize_csv():

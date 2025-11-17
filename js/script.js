@@ -4,9 +4,17 @@
 // =============================================================================
 
 document.addEventListener('DOMContentLoaded', () => {
+    console.log('[Dashboard] Iniciando...');
+
+    // Verificar que SENTINEL existe
+    if (typeof SENTINEL === 'undefined') {
+        console.error('[Error] SENTINEL no está definido. ¿Se cargó common.js?');
+        return;
+    }
+
     // === CONFIGURACIÓN ===
-    const API_URL = 'http://localhost:5000';
-    const POLL_INTERVAL = 3000;
+    const API_URL = SENTINEL.CONFIG.API_URL || 'http://localhost:5000';
+    const POLL_INTERVAL = SENTINEL.CONFIG.POLL_INTERVAL || 3000;
     
     // Referencias DOM - Configuración Vehículo
     const vehicleBrand = document.getElementById('vehicleBrand');

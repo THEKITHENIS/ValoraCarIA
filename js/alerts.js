@@ -2,7 +2,8 @@
 // SENTINEL PRO - ALERTS PAGE JAVASCRIPT
 // =============================================================================
 
-const API_URL = 'http://localhost:5000';
+// API URL se inicializa después de verificar SENTINEL
+let API_URL = 'http://localhost:5000';
 
 // State
 let currentVehicles = [];
@@ -21,6 +22,15 @@ let typeChart = null;
 
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('[ALERTS] Inicializando sistema de alertas...');
+
+    // Verificar que SENTINEL existe
+    if (typeof SENTINEL === 'undefined') {
+        console.error('[Error] SENTINEL no está definido. ¿Se cargó common.js?');
+        return;
+    }
+
+    // Actualizar API_URL desde configuración
+    API_URL = SENTINEL.CONFIG.API_URL || API_URL;
 
     // Setup tabs
     setupTabs();

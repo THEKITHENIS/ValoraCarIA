@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 # =============================================================================
 # SENTINEL PRO - DATABASE MANAGER
 # Gestión completa de base de datos SQLite para sistema de flotas

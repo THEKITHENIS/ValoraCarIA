@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 # =============================================================================
 # SENTINEL PRO - ALERT MONITORING ENGINE
 # Motor de monitoreo y evaluación de reglas de alertas en tiempo real
@@ -229,8 +230,11 @@ class AlertMonitor:
             return False
 
         # Si el valor cambió significativamente (>10%), no es duplicada
-        value_diff_percent = abs(value - cached_data['value']) / cached_data['value'] * 100
-        if value_diff_percent > 10:
+        if cached_data['value'] != 0:
+            value_diff_percent = abs(value - cached_data['value']) / cached_data['value'] * 100
+            if value_diff_percent > 10:
+                return False
+        elif abs(value - cached_data['value']) > 0.1:  # Si cached era 0, comparar diferencia absoluta
             return False
 
         return True
