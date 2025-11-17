@@ -190,29 +190,62 @@ def initialize_csv():
     if not os.path.exists(CSV_FILENAME):
         with open(CSV_FILENAME, 'w', newline='', encoding='utf-8') as f:
             writer = csv.writer(f)
+            # Encabezados para los 21 PIDs confirmados
             writer.writerow([
                 'timestamp', 'date', 'time',
-                'rpm', 'speed_kmh', 'throttle_pos', 'engine_load', 'maf',
-                'coolant_temp', 'intake_temp', 'distance_km'
+                # PIDs críticos (fast)
+                'rpm', 'speed_kmh', 'throttle_pos', 'engine_load', 'maf', 'intake_pressure',
+                # PIDs importantes (medium)
+                'coolant_temp', 'intake_temp', 'control_module_voltage',
+                'fuel_rail_pressure_direct', 'barometric_pressure',
+                'relative_throttle_pos', 'ambiant_air_temp',
+                # PIDs informativos (slow)
+                'accelerator_pos_d', 'accelerator_pos_e', 'run_time',
+                'distance_w_mil', 'distance_since_dtc_clear',
+                # Calculados
+                'distance_km'
             ])
-        print(f"[CSV] ✓ Archivo creado con columnas optimizadas")
+        print(f"[CSV] ✓ Archivo creado con 21 PIDs confirmados + distancia")
 
 def save_reading_to_csv(data, thermal_data=None):
+    """
+    Guarda una lectura OBD en el CSV con todos los 21 PIDs confirmados
+
+    Args:
+        data: Dict con los datos OBD leídos
+        thermal_data: Deprecated, ya no se usa (los datos térmicos están en data)
+    """
     try:
         now = datetime.now()
         with open(CSV_FILENAME, 'a', newline='', encoding='utf-8') as f:
             writer = csv.writer(f)
             writer.writerow([
+                # Timestamp
                 now.isoformat(),
                 now.strftime('%Y-%m-%d'),
                 now.strftime('%H:%M:%S'),
+                # PIDs críticos (fast)
                 data.get('RPM', ''),
                 data.get('SPEED', ''),
                 data.get('THROTTLE_POS', ''),
                 data.get('ENGINE_LOAD', ''),
                 data.get('MAF', ''),
-                thermal_data.get('COOLANT_TEMP', '') if thermal_data else '',
-                thermal_data.get('INTAKE_TEMP', '') if thermal_data else '',
+                data.get('INTAKE_PRESSURE', ''),
+                # PIDs importantes (medium)
+                data.get('COOLANT_TEMP', ''),
+                data.get('INTAKE_TEMP', ''),
+                data.get('CONTROL_MODULE_VOLTAGE', ''),
+                data.get('FUEL_RAIL_PRESSURE_DIRECT', ''),  # ¡Importante para diesel!
+                data.get('BAROMETRIC_PRESSURE', ''),
+                data.get('RELATIVE_THROTTLE_POS', ''),
+                data.get('AMBIANT_AIR_TEMP', ''),
+                # PIDs informativos (slow)
+                data.get('ACCELERATOR_POS_D', ''),
+                data.get('ACCELERATOR_POS_E', ''),
+                data.get('RUN_TIME', ''),
+                data.get('DISTANCE_W_MIL', ''),
+                data.get('DISTANCE_SINCE_DTC_CLEAR', ''),
+                # Calculados
                 data.get('total_distance', '')
             ])
     except Exception as e:
@@ -595,7 +628,7 @@ initialize_csv()
 
 @app.route("/get_live_data", methods=["GET"])
 def get_live_data():
-    global connection, trip_data, last_thermal_reading_time
+    global connection, trip_data, last_thermal_reading_time, obd_last_readings
 
     if not connection or not connection.is_connected():
         return jsonify({
@@ -610,37 +643,23 @@ def get_live_data():
             "total_distance": 0
         })
 
-    # USAR MÉTODO OPTIMIZADO CON REINTENTOS (reduce errores "Failed to read port")
+    # =========================================================================
+    # USAR MÉTODO OPTIMIZADO CON REINTENTOS Y FRECUENCIAS
+    # Lee los 21 PIDs confirmados con frecuencias optimizadas
+    # =========================================================================
+    data, obd_last_readings = read_obd_data_optimized(connection, obd_last_readings)
+
+    # Asegurar que siempre tengamos valores para los PIDs críticos (aunque sean None)
+    critical_keys = ['RPM', 'SPEED', 'THROTTLE_POS', 'ENGINE_LOAD', 'MAF',
+                     'COOLANT_TEMP', 'INTAKE_TEMP']
     results = {}
+    for key in critical_keys:
+        results[key] = data.get(key)
 
-    # PIDs CRÍTICOS (usar solo los que funcionan)
-    critical_pids = ['RPM', 'SPEED', 'THROTTLE_POS', 'ENGINE_LOAD', 'MAF']
-    for pid_name in critical_pids:
-        value = read_pid_with_retries(connection, pid_name, max_attempts=2)
-        results[pid_name] = value
-
-    # DATOS TÉRMICOS (cada 60s) - usar método optimizado
-    thermal_data = {}
-    current_time = time.time()
-
-    if current_time - last_thermal_reading_time >= THERMAL_READING_INTERVAL:
-        thermal_pids = ['COOLANT_TEMP', 'INTAKE_TEMP']
-        for pid_name in thermal_pids:
-            value = read_pid_with_retries(connection, pid_name, max_attempts=3)
-            if value is not None:
-                thermal_data[pid_name] = value
-
-        last_thermal_reading_time = current_time
-        results.update(thermal_data)
-    else:
-        # Usar últimas lecturas térmicas
-        if trip_data.get("points") and len(trip_data["points"]) > 0:
-            last_point = trip_data["points"][-1]
-            results['COOLANT_TEMP'] = last_point.get('COOLANT_TEMP')
-            results['INTAKE_TEMP'] = last_point.get('INTAKE_TEMP')
-        else:
-            results['COOLANT_TEMP'] = None
-            results['INTAKE_TEMP'] = None
+    # Añadir TODOS los demás PIDs leídos (incluyendo FUEL_RAIL_PRESSURE_DIRECT para diesel)
+    for key, value in data.items():
+        if key not in results:
+            results[key] = value
 
     # =========================================================================
     # MODO MANUAL: Solo registrar datos si hay viaje activo
@@ -659,8 +678,8 @@ def get_live_data():
         trip_data["points"].append(results)
         trip_data["last_read_time"] = current_time
 
-        # Guardar en CSV solo si hay viaje activo
-        save_reading_to_csv(results, thermal_data if thermal_data else None)
+        # Guardar en CSV solo si hay viaje activo (ahora incluye los 21 PIDs)
+        save_reading_to_csv(results, None)
 
         # Análisis de salud cada 30 puntos
         if len(trip_data["points"]) % 30 == 0:
