@@ -6,6 +6,12 @@
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('[FLEET] Sistema de gestión de flotas iniciado');
 
+    // Verificar que SENTINEL existe
+    if (typeof SENTINEL === 'undefined') {
+        console.error('[Error] SENTINEL no está definido. ¿Se cargó common.js?');
+        return;
+    }
+
     // === VARIABLES GLOBALES ===
     let allVehicles = [];
     let filteredVehicles = [];

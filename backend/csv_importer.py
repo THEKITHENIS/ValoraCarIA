@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 SENTINEL PRO - CSV Importer Module
 Sistema avanzado de importación de datos CSV de múltiples fuentes
