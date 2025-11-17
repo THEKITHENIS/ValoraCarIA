@@ -1937,12 +1937,30 @@ def start_trip_endpoint():
         data = request.json
         vehicle_id = data.get('vehicle_id')
 
+        # VALIDACIÓN CRÍTICA: vehicle_id es obligatorio
         if not vehicle_id:
-            return jsonify({"error": "vehicle_id requerido"}), 400
+            print("[TRIP] ✗ Error: vehicle_id no proporcionado")
+            return jsonify({
+                "success": False,
+                "error": "Debes seleccionar un vehículo antes de iniciar el viaje"
+            }), 400
+
+        # Verificar que el vehículo existe en la base de datos
+        vehicle = db.get_vehicle_by_id(vehicle_id)
+        if not vehicle:
+            print(f"[TRIP] ✗ Error: Vehículo ID {vehicle_id} no encontrado")
+            return jsonify({
+                "success": False,
+                "error": f"Vehículo con ID {vehicle_id} no encontrado"
+            }), 404
 
         # Verificar que OBD esté conectado
         if not connection or not connection.is_connected():
-            return jsonify({"error": "Adaptador OBD no conectado"}), 400
+            print("[TRIP] ✗ Error: Adaptador OBD no conectado")
+            return jsonify({
+                "success": False,
+                "error": "Adaptador OBD no conectado. Conecta el adaptador antes de iniciar el viaje"
+            }), 400
 
         # Iniciar viaje en BD
         trip_id = db.start_trip(vehicle_id)
@@ -1954,17 +1972,25 @@ def start_trip_endpoint():
         trip_data["last_read_time"] = time.time()
         trip_data["trip_id"] = trip_id  # Guardar ID de BD
 
-        print(f"[TRIP] ✓ Viaje {trip_id} iniciado manualmente para vehículo {vehicle_id}")
+        vehicle_name = f"{vehicle.get('brand', '')} {vehicle.get('model', '')}".strip()
+        print(f"[TRIP] ✓ Viaje {trip_id} iniciado para vehículo {vehicle_name} (ID: {vehicle_id})")
 
         return jsonify({
             "success": True,
             "trip_id": trip_id,
-            "message": "Viaje iniciado"
+            "vehicle_id": vehicle_id,
+            "vehicle_name": vehicle_name,
+            "message": f"Viaje iniciado para {vehicle_name}"
         }), 201
 
     except Exception as e:
-        print(f"[API] Error iniciando viaje: {e}")
-        return jsonify({"error": str(e)}), 500
+        print(f"[API] ✗ Error iniciando viaje: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
 
 @app.route("/api/trips/<int:trip_id>/stop", methods=["POST"])
 def stop_trip_endpoint(trip_id):
