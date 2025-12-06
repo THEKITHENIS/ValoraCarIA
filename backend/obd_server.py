@@ -26,12 +26,15 @@ except ImportError:
     GEOCODER_AVAILABLE = False
     print("[Geocoder] ⚠️ No disponible")
 
+# Gemini AI - Opcional para análisis con IA
 try:
     import google.generativeai as genai
     GEMINI_AVAILABLE = True
+    print("[Gemini] ✓ API disponible")
 except ImportError:
     GEMINI_AVAILABLE = False
-    print("[Gemini] ⚠️ No disponible")
+    genai = None
+    print("[Gemini] ⚠️ No disponible - El sistema funciona correctamente sin IA")
 
 try:
     from fpdf2 import FPDF
@@ -85,6 +88,10 @@ last_connection_attempt_time = 0
 last_thermal_reading_time = 0
 RECONNECTION_COOLDOWN = 10
 THERMAL_READING_INTERVAL = 60
+
+# Variable global para control de frecuencias en lectura optimizada
+# IMPORTANTE: Debe inicializarse aquí para evitar NameError en get_live_data
+obd_last_readings = None
 
 trip_data = {}
 maintenanceHistory = []
@@ -1946,7 +1953,7 @@ def start_trip_endpoint():
             }), 400
 
         # Verificar que el vehículo existe en la base de datos
-        vehicle = db.get_vehicle_by_id(vehicle_id)
+        vehicle = db.get_vehicle(vehicle_id)
         if not vehicle:
             print(f"[TRIP] ✗ Error: Vehículo ID {vehicle_id} no encontrado")
             return jsonify({
@@ -3026,7 +3033,7 @@ def gemini_analyze_csv():
             return jsonify({'error': 'Vehículo no encontrado'}), 404
 
         # Obtener estadísticas del vehículo
-        stats = db.get_vehicle_statistics(vehicle_id)
+        stats = db.get_vehicle_stats(vehicle_id)
 
         # Construir prompt para análisis
         prompt = f"""
@@ -3103,7 +3110,7 @@ def gemini_health_report():
             return jsonify({'error': 'Vehículo no encontrado'}), 404
 
         # Obtener estadísticas
-        stats = db.get_vehicle_statistics(vehicle_id)
+        stats = db.get_vehicle_stats(vehicle_id)
 
         # Obtener últimos viajes
         recent_trips = db.get_vehicle_trips(vehicle_id, limit=10)
@@ -3230,7 +3237,8 @@ if __name__ == "__main__":
     # Verificar tabla obd_extended
     if db:
         try:
-            cursor = db.conn.cursor()
+            conn = db._get_connection()
+            cursor = conn.cursor()
             cursor.execute('''
                 SELECT name FROM sqlite_master
                 WHERE type='table' AND name='obd_extended'
