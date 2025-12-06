@@ -893,7 +893,7 @@
                         <div style="display: flex; gap: 1.5rem; flex-wrap: wrap; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #e2e8f0;">
                             ${m.mileage ? `<span style="display: flex; align-items: center; gap: 0.5rem; color: #64748b; font-size: 0.9rem;"><i class="fas fa-tachometer-alt"></i> ${m.mileage} km</span>` : ''}
                             ${m.cost ? `<span style="display: flex; align-items: center; gap: 0.5rem; color: #64748b; font-size: 0.9rem;"><i class="fas fa-euro-sign"></i> ${m.cost}€</span>` : ''}
-                            ${m.provider ? `<span style="display: flex; align-items: center; gap: 0.5rem; color: #64748b; font-size: 0.9rem;"><i class="fas fa-wrench"></i> ${m.provider}</span>` : ''}
+                            ${m.mechanic ? `<span style="display: flex; align-items: center; gap: 0.5rem; color: #64748b; font-size: 0.9rem;"><i class="fas fa-wrench"></i> ${m.mechanic}</span>` : ''}
                         </div>
                     </div>
                 `).join('');
@@ -1457,7 +1457,7 @@
                     date: document.getElementById('maintenanceDate').value,
                     mileage: parseInt(document.getElementById('maintenanceMileage').value) || null,
                     cost: parseFloat(document.getElementById('maintenanceCost').value) || null,
-                    provider: document.getElementById('maintenanceProvider').value || null
+                    mechanic: document.getElementById('maintenanceProvider').value || null
                 };
 
                 SENTINEL.Toast.info('Guardando mantenimiento...');

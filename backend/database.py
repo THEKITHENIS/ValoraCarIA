@@ -857,6 +857,40 @@ class DatabaseManager:
         finally:
             conn.close()
 
+    def delete_maintenance(self, maintenance_id: int) -> bool:
+        """
+        Elimina un registro de mantenimiento
+
+        Args:
+            maintenance_id: ID del mantenimiento a eliminar
+
+        Returns:
+            True si se eliminó correctamente
+        """
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        try:
+            cursor.execute('''
+                DELETE FROM maintenance WHERE id = ?
+            ''', (maintenance_id,))
+
+            conn.commit()
+            deleted = cursor.rowcount > 0
+
+            if deleted:
+                print(f"[DB] ✓ Mantenimiento {maintenance_id} eliminado")
+            else:
+                print(f"[DB] ✗ Mantenimiento {maintenance_id} no encontrado")
+
+            return deleted
+
+        except Exception as e:
+            print(f"[DB] ✗ Error eliminando mantenimiento: {e}")
+            raise
+        finally:
+            conn.close()
+
     # =========================================================================
     # ESTADÍSTICAS Y ANALYTICS
     # =========================================================================

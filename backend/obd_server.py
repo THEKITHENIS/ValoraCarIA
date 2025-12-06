@@ -2177,6 +2177,30 @@ def get_vehicle_maintenance_endpoint(vehicle_id):
         print(f"[API] Error obteniendo mantenimiento: {e}")
         return jsonify({"error": str(e)}), 500
 
+@app.route("/api/maintenance/<int:maintenance_id>", methods=["DELETE"])
+def delete_maintenance_endpoint(maintenance_id):
+    """Eliminar registro de mantenimiento"""
+    if not db:
+        return jsonify({"error": "Base de datos no disponible"}), 500
+
+    try:
+        deleted = db.delete_maintenance(maintenance_id)
+
+        if deleted:
+            return jsonify({
+                "success": True,
+                "message": "Mantenimiento eliminado correctamente"
+            })
+        else:
+            return jsonify({
+                "success": False,
+                "error": "Registro no encontrado"
+            }), 404
+
+    except Exception as e:
+        print(f"[API] Error eliminando mantenimiento: {e}")
+        return jsonify({"error": str(e)}), 500
+
 # --- ENDPOINTS DE ANALYTICS ---
 
 @app.route("/api/analytics/<int:vehicle_id>", methods=["GET"])

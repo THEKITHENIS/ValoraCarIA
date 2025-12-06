@@ -581,16 +581,45 @@
             <!-- FORMULARIO DE REGISTRO (Oculto por defecto) -->
             <div id="maintenanceFormContainer" style="display: none; margin-bottom: 1.5rem; padding: 1.5rem; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;">
                 <h3 style="margin-top: 0; margin-bottom: 1rem; color: #1e293b; font-size: 1rem;">
-                    <i class="fas fa-plus-circle"></i> Nuevo Registro
+                    <i class="fas fa-plus-circle"></i> Nuevo Registro de Mantenimiento
                 </h3>
                 <form id="maintenanceForm">
                     <div class="form-group">
-                        <label for="maintenanceType">Tipo de Intervención</label>
-                        <input type="text" id="maintenanceType" placeholder="Ej: Cambio de aceite, Revisión de frenos" required>
+                        <label for="maintenanceType">Tipo de Mantenimiento *</label>
+                        <select id="maintenanceType" required style="width: 100%; padding: 0.75rem; border: 1px solid #cbd5e1; border-radius: 8px;">
+                            <option value="">Seleccionar...</option>
+                            <option value="Cambio de aceite">Cambio de aceite</option>
+                            <option value="Cambio de filtros">Cambio de filtros</option>
+                            <option value="Revisión de frenos">Revisión de frenos</option>
+                            <option value="Cambio de neumáticos">Cambio de neumáticos</option>
+                            <option value="Revisión general">Revisión general</option>
+                            <option value="Reparación">Reparación</option>
+                            <option value="Otro">Otro</option>
+                        </select>
                     </div>
                     <div class="form-group">
-                        <label for="maintenanceDate">Fecha</label>
-                        <input type="date" id="maintenanceDate" required>
+                        <label for="maintenanceDescription">Descripción *</label>
+                        <textarea id="maintenanceDescription" rows="3" required placeholder="Describe el mantenimiento realizado..." style="width: 100%; padding: 0.75rem; border: 1px solid #cbd5e1; border-radius: 8px; resize: vertical;"></textarea>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                        <div class="form-group">
+                            <label for="maintenanceDate">Fecha *</label>
+                            <input type="date" id="maintenanceDate" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="maintenanceMileage">Kilometraje</label>
+                            <input type="number" id="maintenanceMileage" placeholder="150000">
+                        </div>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                        <div class="form-group">
+                            <label for="maintenanceCost">Coste (€)</label>
+                            <input type="number" id="maintenanceCost" step="0.01" placeholder="150.00">
+                        </div>
+                        <div class="form-group">
+                            <label for="maintenanceProvider">Taller/Proveedor</label>
+                            <input type="text" id="maintenanceProvider" placeholder="Nombre del taller">
+                        </div>
                     </div>
                     <div style="display: flex; gap: 0.5rem;">
                         <button type="submit" class="btn btn-success" style="flex: 1;">
@@ -606,9 +635,9 @@
             </div>
 
             <!-- LISTA DE REGISTROS -->
-            <ul id="maintenanceLog" style="list-style: none; margin: 0; padding: 0;">
-                <li class="no-data">No hay registros de mantenimiento</li>
-            </ul>
+            <div id="maintenanceLog">
+                <p class="no-data">No hay registros de mantenimiento</p>
+            </div>
         </div>
 
     </div>

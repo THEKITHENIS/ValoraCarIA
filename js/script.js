@@ -1165,6 +1165,9 @@ document.addEventListener('DOMContentLoaded', () => {
         localStorage.setItem('activeVehicleId', activeVehicleId);
         localStorage.setItem('activeVehicleInfo', JSON.stringify(activeVehicleInfo));
 
+        // Limpiar datos anteriores antes de cargar los nuevos
+        resetTripUI();
+
         // Actualizar UI - Tarjeta de vehículo conectado
         const vehicleName = `${activeVehicleInfo.brand} ${activeVehicleInfo.model}`.trim();
 
@@ -1179,8 +1182,20 @@ document.addEventListener('DOMContentLoaded', () => {
         tripVehicleSection.style.display = 'none';
         connectedVehicleCard.style.display = 'block';
 
+        // Cargar historial de mantenimiento del nuevo vehículo desde la API
+        await loadMaintenanceLog();
+
+        // Actualizar formulario de configuración del vehículo
+        if (vehicleBrand) vehicleBrand.value = activeVehicleInfo.brand || '';
+        if (vehicleModel) vehicleModel.value = activeVehicleInfo.model || '';
+        if (vehicleYear) vehicleYear.value = activeVehicleInfo.year || '';
+        if (vehicleMileage) vehicleMileage.value = activeVehicleInfo.mileage || '';
+        if (vehicleTransmission) vehicleTransmission.value = activeVehicleInfo.transmission || 'manual';
+        if (vehicleType) vehicleType.value = activeVehicleInfo.fuel_type || 'gasolina';
+
         console.log(`[TRIP] ✓ Vehículo ${vehicleName} seleccionado (ID: ${activeVehicleId})`);
         console.log(`[TRIP] ✓ Guardado en SENTINEL.ActiveVehicle para viajes automáticos`);
+        console.log(`[TRIP] ✓ Datos de mantenimiento cargados`);
         SENTINEL.Toast.success(`Vehículo ${vehicleName} listo. Los viajes se crearán automáticamente al detectar el motor encendido.`);
 
         // ESCANEO AUTOMÁTICO DE PIDs DISPONIBLES
@@ -1203,10 +1218,54 @@ document.addEventListener('DOMContentLoaded', () => {
         localStorage.removeItem('activeVehicleId');
         localStorage.removeItem('activeVehicleInfo');
 
+        // Limpiar datos de viaje de la UI
+        resetTripUI();
+
+        // Limpiar historial de mantenimiento
+        clearMaintenanceLog();
+
+        // Limpiar datos del formulario de vehículo
+        clearVehicleForm();
+
         connectedVehicleCard.style.display = 'none';
         tripVehicleSection.style.display = 'block';
 
         loadVehiclesForTrip();
+
+        console.log('[TRIP] Vehículo cambiado - datos limpiados');
+    }
+
+    /**
+     * Resetear UI de viaje
+     */
+    function resetTripUI() {
+        // Resetear variables de viaje
+        tripDistance = 0;
+        tripDataPoints = 0;
+
+        // Resetear displays de viaje
+        if (tripDurationDisplay) tripDurationDisplay.textContent = '00:00:00';
+        if (activeTripDuration) activeTripDuration.textContent = '00:00:00';
+        if (activeTripDistance) activeTripDistance.textContent = '0.0 km';
+        if (activeTripDataPoints) activeTripDataPoints.textContent = '0';
+
+        // Resetear datos en vivo
+        if (liveRpm) liveRpm.textContent = '---';
+        if (liveSpeed) liveSpeed.textContent = '---';
+        if (liveDistance) liveDistance.textContent = '---';
+        if (liveThrottle) liveThrottle.textContent = '---';
+        if (liveLoad) liveLoad.textContent = '---';
+        if (liveMaf) liveMaf.textContent = '---';
+        if (liveCoolantTemp) liveCoolantTemp.textContent = '---';
+        if (liveIntakeTemp) liveIntakeTemp.textContent = '---';
+
+        // Resetear salud
+        if (healthScore) healthScore.textContent = '---';
+        if (engineHealth) engineHealth.textContent = '---';
+        if (thermalHealth) thermalHealth.textContent = '---';
+        if (efficiencyHealth) efficiencyHealth.textContent = '---';
+
+        console.log('[TRIP] UI de viaje reseteada');
     }
 
     /**
@@ -2682,49 +2741,136 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     
     // === FUNCIONES DE MANTENIMIENTO ===
-    
+
     function renderMaintenanceLog() {
+        if (!maintenanceLog) return;
+
         if (maintenanceHistory.length === 0) {
-            maintenanceLog.innerHTML = '<li class="no-data">No hay registros.</li>';
+            maintenanceLog.innerHTML = '<p class="no-data">No hay registros de mantenimiento</p>';
         } else {
             maintenanceLog.innerHTML = maintenanceHistory
                 .slice()
                 .reverse()
-                .map((item, index) => `
-                    <li>
-                        <strong>${item.type}</strong> - ${item.date}
-                        <i class="fas fa-trash-alt delete-btn" data-index="${maintenanceHistory.length - 1 - index}"></i>
-                    </li>
+                .map((item) => `
+                    <div class="maintenance-item" style="padding: 1rem; background: white; border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 0.75rem;">
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                            <div style="flex: 1;">
+                                <h4 style="margin: 0 0 0.25rem 0; color: #1e293b; font-size: 1rem;">${item.type}</h4>
+                                <span style="display: flex; align-items: center; gap: 0.5rem; color: #64748b; font-size: 0.85rem;">
+                                    <i class="fas fa-calendar"></i>
+                                    ${item.date ? new Date(item.date).toLocaleDateString('es-ES') : 'Sin fecha'}
+                                </span>
+                            </div>
+                            <button class="btn btn-sm btn-danger delete-maintenance-btn" data-id="${item.id}" style="padding: 0.4rem 0.8rem; font-size: 0.8rem; background: #ef4444; color: white; border: none; border-radius: 6px; cursor: pointer;">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                        ${item.description ? `<p style="margin: 0.5rem 0; color: #475569; font-size: 0.9rem; line-height: 1.5;">${item.description}</p>` : ''}
+                        <div style="display: flex; gap: 1rem; flex-wrap: wrap; margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid #e2e8f0;">
+                            ${item.mileage ? `<span style="display: flex; align-items: center; gap: 0.4rem; color: #64748b; font-size: 0.85rem;"><i class="fas fa-tachometer-alt"></i> ${item.mileage.toLocaleString()} km</span>` : ''}
+                            ${item.cost ? `<span style="display: flex; align-items: center; gap: 0.4rem; color: #64748b; font-size: 0.85rem;"><i class="fas fa-euro-sign"></i> ${item.cost}€</span>` : ''}
+                            ${item.mechanic ? `<span style="display: flex; align-items: center; gap: 0.4rem; color: #64748b; font-size: 0.85rem;"><i class="fas fa-wrench"></i> ${item.mechanic}</span>` : ''}
+                        </div>
+                    </div>
                 `).join('');
         }
     }
-    
-    function saveMaintenanceLog() {
-        const activeVehicleId = localStorage.getItem('activeVehicleId');
-        if (activeVehicleId) {
-            localStorage.setItem(`maintenanceHistory_${activeVehicleId}`, JSON.stringify(maintenanceHistory));
+
+    async function saveMaintenanceToAPI(maintenanceData) {
+        const vehicleId = localStorage.getItem('activeVehicleId');
+        if (!vehicleId) {
+            if (window.SENTINEL && window.SENTINEL.Toast) {
+                window.SENTINEL.Toast.error('Selecciona un vehículo antes de guardar mantenimiento');
+            }
+            return false;
+        }
+
+        try {
+            const response = await fetch(`${API_URL}/api/maintenance`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    vehicle_id: parseInt(vehicleId),
+                    ...maintenanceData
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error('Error al guardar mantenimiento');
+            }
+
+            const result = await response.json();
+            console.log('[MAINTENANCE] Guardado en API:', result);
+            return true;
+        } catch (error) {
+            console.error('[MAINTENANCE] Error guardando:', error);
+            if (window.SENTINEL && window.SENTINEL.Toast) {
+                window.SENTINEL.Toast.error('Error al guardar el mantenimiento');
+            }
+            return false;
         }
     }
 
-    function loadMaintenanceLog() {
-        const activeVehicleId = localStorage.getItem('activeVehicleId');
-        if (activeVehicleId) {
-            const stored = localStorage.getItem(`maintenanceHistory_${activeVehicleId}`);
-            if (stored) {
-                maintenanceHistory = JSON.parse(stored);
+    async function loadMaintenanceLog() {
+        const vehicleId = localStorage.getItem('activeVehicleId');
+        console.log('[MAINTENANCE] Cargando mantenimiento para vehículo:', vehicleId);
+
+        if (!vehicleId) {
+            clearMaintenanceLog();
+            return;
+        }
+
+        try {
+            const response = await fetch(`${API_URL}/api/vehicles/${vehicleId}/maintenance`);
+            const data = await response.json();
+
+            console.log('[MAINTENANCE] Datos recibidos:', data);
+
+            if (data.success && data.maintenance) {
+                maintenanceHistory = data.maintenance;
             } else {
                 maintenanceHistory = [];
             }
             renderMaintenanceLog();
-        } else {
-            clearMaintenanceLog();
+        } catch (error) {
+            console.error('[MAINTENANCE] Error cargando:', error);
+            maintenanceHistory = [];
+            renderMaintenanceLog();
+        }
+    }
+
+    async function deleteMaintenanceRecord(maintenanceId) {
+        if (!confirm('¿Estás seguro de eliminar este registro?')) {
+            return;
+        }
+
+        try {
+            const response = await fetch(`${API_URL}/api/maintenance/${maintenanceId}`, {
+                method: 'DELETE'
+            });
+
+            if (!response.ok) {
+                throw new Error('Error al eliminar');
+            }
+
+            if (window.SENTINEL && window.SENTINEL.Toast) {
+                window.SENTINEL.Toast.success('Registro eliminado');
+            }
+
+            // Recargar lista
+            await loadMaintenanceLog();
+        } catch (error) {
+            console.error('[MAINTENANCE] Error eliminando:', error);
+            if (window.SENTINEL && window.SENTINEL.Toast) {
+                window.SENTINEL.Toast.error('Error al eliminar el registro');
+            }
         }
     }
 
     function clearMaintenanceLog() {
         maintenanceHistory = [];
         if (maintenanceLog) {
-            maintenanceLog.innerHTML = '<li class="no-data"><i class="fas fa-info-circle"></i> No hay vehículo activo. Selecciona o crea un vehículo.</li>';
+            maintenanceLog.innerHTML = '<p class="no-data"><i class="fas fa-info-circle"></i> No hay vehículo activo. Selecciona o crea un vehículo.</p>';
         }
     }
     
@@ -2760,30 +2906,57 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    maintenanceForm.addEventListener('submit', (e) => {
+    maintenanceForm.addEventListener('submit', async (e) => {
         e.preventDefault();
-        maintenanceHistory.push({
-            type: document.getElementById('maintenanceType').value,
-            date: document.getElementById('maintenanceDate').value
-        });
-        saveMaintenanceLog();
-        renderMaintenanceLog();
-        maintenanceForm.reset();
 
-        // Ocultar formulario después de guardar
-        if (maintenanceFormContainer && toggleMaintenanceFormBtn) {
-            maintenanceFormContainer.style.display = 'none';
-            toggleMaintenanceFormBtn.innerHTML = '<i class="fas fa-plus"></i> Agregar';
-            toggleMaintenanceFormBtn.classList.remove('btn-secondary');
-            toggleMaintenanceFormBtn.classList.add('btn-primary');
+        const vehicleId = localStorage.getItem('activeVehicleId');
+        if (!vehicleId) {
+            if (window.SENTINEL && window.SENTINEL.Toast) {
+                window.SENTINEL.Toast.error('Selecciona un vehículo antes de guardar mantenimiento');
+            }
+            return;
+        }
+
+        // Recoger datos del formulario completo
+        const maintenanceData = {
+            type: document.getElementById('maintenanceType').value,
+            description: document.getElementById('maintenanceDescription')?.value || '',
+            date: document.getElementById('maintenanceDate').value,
+            mileage: parseInt(document.getElementById('maintenanceMileage')?.value) || null,
+            cost: parseFloat(document.getElementById('maintenanceCost')?.value) || null,
+            mechanic: document.getElementById('maintenanceProvider')?.value || null
+        };
+
+        // Guardar en la API
+        const success = await saveMaintenanceToAPI(maintenanceData);
+
+        if (success) {
+            if (window.SENTINEL && window.SENTINEL.Toast) {
+                window.SENTINEL.Toast.success('Mantenimiento guardado correctamente');
+            }
+
+            // Recargar lista desde la API
+            await loadMaintenanceLog();
+            maintenanceForm.reset();
+
+            // Ocultar formulario después de guardar
+            if (maintenanceFormContainer && toggleMaintenanceFormBtn) {
+                maintenanceFormContainer.style.display = 'none';
+                toggleMaintenanceFormBtn.innerHTML = '<i class="fas fa-plus"></i> Agregar';
+                toggleMaintenanceFormBtn.classList.remove('btn-secondary');
+                toggleMaintenanceFormBtn.classList.add('btn-primary');
+            }
         }
     });
-    
+
+    // Event listener para eliminar mantenimiento (delegación de eventos)
     maintenanceLog.addEventListener('click', (e) => {
-        if (e.target.classList.contains('delete-btn')) {
-            maintenanceHistory.splice(e.target.dataset.index, 1);
-            saveMaintenanceLog();
-            renderMaintenanceLog();
+        const deleteBtn = e.target.closest('.delete-maintenance-btn');
+        if (deleteBtn) {
+            const maintenanceId = deleteBtn.dataset.id;
+            if (maintenanceId) {
+                deleteMaintenanceRecord(maintenanceId);
+            }
         }
     });
     
