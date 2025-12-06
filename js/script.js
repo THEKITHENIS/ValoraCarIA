@@ -1590,7 +1590,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!tripActive || !currentTripId) return;
 
         try {
-            const response = await fetch(`${API_URL}/live`, {
+            const response = await fetch(`${API_URL}/get_live_data`, {
                 method: 'GET',
                 headers: { 'Content-Type': 'application/json' }
             });
